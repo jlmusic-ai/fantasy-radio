@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { browserClient } from "../../lib/supabase";
 import { weekStart, seasonStart } from "../../lib/game";
 type Category = {
@@ -47,6 +47,40 @@ function pittsburghDateTimeToUtc(local: string) {
       (Number(match[2]) * 60 + Number(match[3] || 0))
     : -240;
   return new Date(guess.getTime() - offsetMinutes * 60_000).toISOString();
+}
+
+function DatePicker({
+  label,
+  type,
+  value,
+  onChange,
+}: {
+  label: string;
+  type: "date" | "datetime-local";
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <label>
+      {label}
+      <div className="date-picker">
+        <input
+          ref={input}
+          type={type}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <button
+          type="button"
+          aria-label={`Open calendar for ${label}`}
+          onClick={() => input.current?.showPicker?.()}
+        >
+          📅 Choose
+        </button>
+      </div>
+    </label>
+  );
 }
 
 export default function Commissioner() {
@@ -237,22 +271,18 @@ export default function Commissioner() {
     <>
       <h1>Commissioner dashboard</h1>
       <div className="panel">
-        <label>
-          Week beginning Monday
-          <input
-            type="date"
-            value={week}
-            onChange={(e) => setWeek(e.target.value)}
-          />
-        </label>
-        <label>
-          Lineup lock date and time (Pittsburgh)
-          <input
-            type="datetime-local"
-            value={lock}
-            onChange={(e) => setLock(e.target.value)}
-          />
-        </label>
+        <DatePicker
+          label="Week beginning Monday"
+          type="date"
+          value={week}
+          onChange={setWeek}
+        />
+        <DatePicker
+          label="Lineup lock date and time (Pittsburgh)"
+          type="datetime-local"
+          value={lock}
+          onChange={setLock}
+        />
         <button disabled={!lock || savingWeek} onClick={createWeek}>
           {savingWeek ? "Saving…" : "Create / update week"}
         </button>
@@ -367,14 +397,12 @@ export default function Commissioner() {
             onChange={(e) => setQuantity(Number(e.target.value))}
           />
         </label>
-        <label>
-          Broadcast time (optional; defaults to now)
-          <input
-            type="datetime-local"
-            value={occurred}
-            onChange={(e) => setOccurred(e.target.value)}
-          />
-        </label>
+        <DatePicker
+          label="Broadcast time (optional; defaults to now)"
+          type="datetime-local"
+          value={occurred}
+          onChange={setOccurred}
+        />
         <label>
           Notes
           <textarea

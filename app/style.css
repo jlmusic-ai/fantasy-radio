@@ -172,6 +172,22 @@ label {
 .topic-actions button:last-child {
   margin-left: auto;
 }
+.date-picker {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.date-picker input,
+.date-picker button {
+  margin: 6px 0 14px;
+}
+.date-picker input {
+  min-width: 0;
+  flex: 1;
+}
+.date-picker button {
+  white-space: nowrap;
+}
 @media (max-width: 560px) {
   header {
     align-items: flex-start;
