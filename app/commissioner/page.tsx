@@ -16,6 +16,39 @@ type Event = {
   note: string;
   occurred_at: string;
 };
+const PITTSBURGH = "America/New_York";
+
+function formatPittsburghDateTime(iso: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: PITTSBURGH,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(iso));
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value || "";
+  return `${value("year")}-${value("month")}-${value("day")}T${value("hour")}:${value("minute")}`;
+}
+
+function pittsburghDateTimeToUtc(local: string) {
+  const guess = new Date(`${local}:00Z`);
+  const zoneName = new Intl.DateTimeFormat("en-US", {
+    timeZone: PITTSBURGH,
+    timeZoneName: "shortOffset",
+  })
+    .formatToParts(guess)
+    .find((part) => part.type === "timeZoneName")?.value;
+  const match = zoneName?.match(/GMT([+-])(\d+)(?::(\d+))?/);
+  const offsetMinutes = match
+    ? (match[1] === "-" ? -1 : 1) *
+      (Number(match[2]) * 60 + Number(match[3] || 0))
+    : -240;
+  return new Date(guess.getTime() - offsetMinutes * 60_000).toISOString();
+}
+
 export default function Commissioner() {
   const db = browserClient();
   const [allowed, setAllowed] = useState(false),
@@ -27,11 +60,13 @@ export default function Commissioner() {
     [note, setNote] = useState(""),
     [occurred, setOccurred] = useState(""),
     [msg, setMsg] = useState(""),
+    [weekMsg, setWeekMsg] = useState(""),
+    [savingWeek, setSavingWeek] = useState(false),
     [topicMsg, setTopicMsg] = useState(""),
     [newTopicName, setNewTopicName] = useState(""),
     [newTopicDescription, setNewTopicDescription] = useState(""),
     [addingTopic, setAddingTopic] = useState(false),
-    [lock, setLock] = useState("06:00");
+    [lock, setLock] = useState(`${weekStart(new Date())}T06:00`);
   async function load() {
     const {
       data: { user },
@@ -44,7 +79,7 @@ export default function Commissioner() {
       .single();
     if (!p?.is_commissioner) return;
     setAllowed(true);
-    const [c, e] = await Promise.all([
+    const [c, e, savedWeek] = await Promise.all([
       db
         .from("categories")
         .select("id,name,description,scoring_type,display_order")
@@ -56,9 +91,15 @@ export default function Commissioner() {
         .select("id,category_id,quantity,note,occurred_at")
         .eq("week_id", week)
         .order("occurred_at", { ascending: false }),
+      db.from("weeks").select("lock_at").eq("id", week).maybeSingle(),
     ]);
     setCategories(c.data || []);
     setEvents(e.data || []);
+    setLock(
+      savedWeek.data?.lock_at
+        ? formatPittsburghDateTime(savedWeek.data.lock_at)
+        : `${week}T06:00`,
+    );
   }
   useEffect(() => {
     load();
@@ -95,25 +136,23 @@ export default function Commissioner() {
     else setMsg("Could not delete event");
   }
   async function createWeek() {
-    const monday = new Date(week + "T06:00:00Z");
-    const local = `${week}T${lock}:00`;
-    const offset =
-      new Intl.DateTimeFormat("en-US", {
-        timeZone: "America/New_York",
-        timeZoneName: "shortOffset",
-      })
-        .formatToParts(monday)
-        .find((x) => x.type === "timeZoneName")?.value || "GMT-4";
-    const match = offset.match(/GMT([+-])(\d+)(?::(\d+))?/);
-    const mins = match
-      ? (match[1] === "-" ? -1 : 1) *
-        (Number(match[2]) * 60 + Number(match[3] || 0))
-      : -240;
-    const utc = new Date(Date.parse(local + "Z") - mins * 60000).toISOString();
+    if (!lock) {
+      setWeekMsg("Choose a lineup lock date and time.");
+      return;
+    }
+    setSavingWeek(true);
+    setWeekMsg("");
+    const utc = pittsburghDateTimeToUtc(lock);
     const { error } = await db
       .from("weeks")
       .upsert({ id: week, lock_at: utc, season_start: seasonStart(week) });
-    setMsg(error ? error.message : "Week created or updated");
+    setSavingWeek(false);
+    setWeekMsg(
+      error
+        ? `Could not update week: ${error.message}`
+        : `Week updated. Picks ${new Date(utc).getTime() > Date.now() ? "are open" : "remain locked because the deadline has passed"}.`,
+    );
+    if (!error) await load();
   }
   function editTopic(id: string, field: "name" | "description", value: string) {
     setCategories((items) =>
@@ -207,14 +246,23 @@ export default function Commissioner() {
           />
         </label>
         <label>
-          Lineup lock (Pittsburgh local time)
+          Lineup lock date and time (Pittsburgh)
           <input
-            type="time"
+            type="datetime-local"
             value={lock}
             onChange={(e) => setLock(e.target.value)}
           />
         </label>
-        <button onClick={createWeek}>Create / update week</button>
+        <button disabled={!lock || savingWeek} onClick={createWeek}>
+          {savingWeek ? "Saving…" : "Create / update week"}
+        </button>
+        {lock &&
+          new Date(pittsburghDateTimeToUtc(lock)).getTime() <= Date.now() && (
+            <p className="error">
+              This deadline has already passed, so picks will be locked.
+            </p>
+          )}
+        {weekMsg && <p>{weekMsg}</p>}
         <p className="muted">
           Create each week before players submit picks. Updating a lock after
           submissions may affect fairness.
