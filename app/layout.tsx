@@ -27,7 +27,8 @@ export default async function Layout({
             />
           </a>
           <nav>
-            <a href="/">Play</a>
+            {user && <a href="/">Play</a>}
+            <a href="/rules">Rules</a>
             {isCommissioner && <a href="/commissioner">Commissioner</a>}
             {user ? (
               <>

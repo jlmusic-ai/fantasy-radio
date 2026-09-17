@@ -232,6 +232,74 @@ label {
   background: transparent;
   color: var(--gold);
 }
+.rules-hero {
+  max-width: 760px;
+  padding: 24px 0 10px;
+}
+.rules-hero h1 {
+  margin: 4px 0 12px;
+}
+.eyebrow {
+  margin: 0;
+  color: var(--gold);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+.rules-intro {
+  max-width: 720px;
+  color: #e2e2e2;
+  font-size: 19px;
+  line-height: 1.65;
+}
+.rules-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+.rules-actions .button {
+  display: inline-block;
+}
+.secondary-button {
+  background: transparent;
+  color: var(--gold);
+}
+.rules-panel {
+  margin-top: 30px;
+}
+.rules-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 28px;
+}
+.rules-list li {
+  padding: 14px 10px;
+  line-height: 1.55;
+}
+.rules-list li::marker {
+  color: var(--gold);
+  font-weight: 900;
+}
+.rules-list strong,
+.rules-list span {
+  display: block;
+}
+.rules-list span {
+  margin-top: 3px;
+  color: #c7c7c7;
+}
+.season-callout {
+  border-color: var(--gold-dark);
+  background: linear-gradient(145deg, #292000, #11100a);
+}
+.season-callout h2 {
+  margin: 8px 0;
+  color: var(--gold);
+  font-size: clamp(24px, 4vw, 36px);
+}
 hr {
   border: 0;
   border-top: 1px solid var(--border);
