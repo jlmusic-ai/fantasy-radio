@@ -4,6 +4,7 @@ import { browserClient } from "../lib/supabase";
 import {
   birthdayBonus,
   defaultLockAt,
+  formatDate,
   pickingWeek,
   seasonStart,
 } from "../lib/game";
@@ -192,7 +193,7 @@ export default function Game() {
           <div className="muted">
             {baseScore} lineup points · {bonus} birthday bonus
           </div>
-          <div className="muted">Week beginning {week}</div>
+          <div className="muted">Week beginning {formatDate(week)}</div>
         </div>
         <div className="panel">
           <div className="muted">LINEUP STATUS</div>
@@ -250,7 +251,7 @@ export default function Game() {
                 <strong>{picks[c.id] || 0} pts</strong>
               </div>
               <p className="muted">
-                {c.description} · {events[c.id] || 0} occurrences ·{" "}
+                {events[c.id] || 0} occurrences ·{" "}
                 {(picks[c.id] || 0) * (events[c.id] || 0)} points earned
               </p>
               <input
@@ -270,7 +271,9 @@ export default function Game() {
           {birthdayCategory && (
             <div className="panel">
               <h3>{birthdayCategory.name}</h3>
-              <p className="muted">{birthdayCategory.description}</p>
+              <p className="muted">
+                {birthdayActual} occurrences · {bonus} bonus points earned
+              </p>
               <label>
                 Your guess
                 <input
@@ -292,11 +295,6 @@ export default function Game() {
                 Exact guess: 50 bonus points. Each number away subtracts 5
                 points, down to 0.
               </p>
-              {locked && birthdayGuess !== null && (
-                <p>
-                  {birthdayActual} wishes recorded · {bonus} bonus points earned
-                </p>
-              )}
             </div>
           )}
           <div className="row">

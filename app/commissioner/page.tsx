@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { browserClient } from "../../lib/supabase";
-import { pickingWeek, seasonStart } from "../../lib/game";
+import { formatDate, pickingWeek, seasonStart } from "../../lib/game";
 type Category = {
   id: string;
   name: string;
@@ -31,6 +31,30 @@ function formatPittsburghDateTime(iso: string) {
   const value = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((part) => part.type === type)?.value || "";
   return `${value("year")}-${value("month")}-${value("day")}T${value("hour")}:${value("minute")}`;
+}
+
+function formatPittsburghDisplayDateTime(iso: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: PITTSBURGH,
+    month: "2-digit",
+    day: "2-digit",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  })
+    .format(new Date(iso))
+    .replace(/^(\d{2})\/(\d{2})\/(\d{4})/, "$1-$2-$3");
+}
+
+function formatPickerValue(value: string) {
+  if (!value) return "";
+  const [date, time] = value.split("T");
+  if (!time) return formatDate(date);
+  const [hours, minutes] = time.split(":").map(Number);
+  const suffix = hours >= 12 ? "PM" : "AM";
+  const displayHour = hours % 12 || 12;
+  return `${formatDate(date)} ${displayHour}:${String(minutes).padStart(2, "0")} ${suffix}`;
 }
 
 function pittsburghDateTimeToUtc(local: string) {
@@ -79,6 +103,7 @@ function DatePicker({
           📅 Choose
         </button>
       </div>
+      {value && <small className="muted">Selected: {formatPickerValue(value)}</small>}
     </label>
   );
 }
@@ -189,7 +214,8 @@ export default function Commissioner() {
     if (!error) await load();
   }
   async function lockWeekNow() {
-    if (!confirm(`Lock picks immediately for the week of ${week}?`)) return;
+    if (!confirm(`Lock picks immediately for the week of ${formatDate(week)}?`))
+      return;
     setSavingWeek(true);
     setWeekMsg("");
     const now = new Date().toISOString();
@@ -452,7 +478,8 @@ export default function Commissioner() {
               {e.quantity}
               <br />
               <small className="muted">
-                {new Date(e.occurred_at).toLocaleString()} · {e.note}
+                {formatPittsburghDisplayDateTime(e.occurred_at)}
+                {e.note ? ` · ${e.note}` : ""}
               </small>
             </p>
             <button onClick={() => remove(e.id)}>Delete</button>
