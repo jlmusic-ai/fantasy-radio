@@ -35,6 +35,20 @@ nav {
   display: flex;
   gap: 17px;
   flex-wrap: wrap;
+  align-items: center;
+}
+nav form {
+  margin: 0;
+}
+.nav-link {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--gold);
+  padding: 0;
+  font: inherit;
+  font-weight: inherit;
 }
 .brand {
   display: flex;
@@ -187,6 +201,41 @@ label {
 }
 .date-picker button {
   white-space: nowrap;
+}
+.avatar {
+  border: 2px solid var(--gold-dark);
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+.avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #29240f;
+  color: var(--gold);
+  font-weight: 900;
+}
+.player-cell,
+.profile-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.secondary-action {
+  margin-left: 8px;
+  background: transparent;
+  color: var(--gold);
+}
+hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 24px 0;
 }
 @media (max-width: 560px) {
   header {

@@ -7,6 +7,7 @@ import {
   pickingWeek,
   seasonStart,
 } from "../lib/game";
+import Avatar from "./avatar";
 type Category = {
   id: string;
   name: string;
@@ -15,7 +16,12 @@ type Category = {
   display_order: number;
 };
 type Pick = { category_id: string; points: number };
-type Score = { username: string; score: number; user_id: string };
+type Score = {
+  username: string;
+  avatar_url: string | null;
+  score: number;
+  user_id: string;
+};
 export default function Game() {
   const db = browserClient();
   const [user, setUser] = useState<string | null>(null),
@@ -49,13 +55,13 @@ export default function Game() {
       db.from("events").select("category_id,quantity").eq("week_id", w),
       db
         .from("weekly_scores")
-        .select("username,score,user_id")
+        .select("username,avatar_url,score,user_id")
         .eq("week_id", w)
         .order("score", { ascending: false })
         .limit(100),
       db
         .from("season_scores")
-        .select("username,score,user_id")
+        .select("username,avatar_url,score,user_id")
         .eq("season_start", seasonStart(w))
         .order("score", { ascending: false })
         .limit(100),
@@ -69,8 +75,33 @@ export default function Game() {
         (counts[e.category_id] = (counts[e.category_id] || 0) + e.quantity),
     );
     setEvents(counts);
-    setLeaders(lb.data || []);
-    setSeasonLeaders(sl.data || []);
+    const rawLeaders = (lb.data || []) as Score[];
+    const rawSeasonLeaders = (sl.data || []) as Score[];
+    const avatarPaths = [
+      ...new Set(
+        [...rawLeaders, ...rawSeasonLeaders]
+          .map((player) => player.avatar_url)
+          .filter((path): path is string => Boolean(path)),
+      ),
+    ];
+    const signedAvatars = new Map<string, string>();
+    if (avatarPaths.length) {
+      const { data } = await db.storage
+        .from("avatars")
+        .createSignedUrls(avatarPaths, 3600);
+      (data || []).forEach((item) => {
+        if (item.path && item.signedUrl)
+          signedAvatars.set(item.path, item.signedUrl);
+      });
+    }
+    const withSignedAvatar = (player: Score) => ({
+      ...player,
+      avatar_url: player.avatar_url
+        ? signedAvatars.get(player.avatar_url) || null
+        : null,
+    });
+    setLeaders(rawLeaders.map(withSignedAvatar));
+    setSeasonLeaders(rawSeasonLeaders.map(withSignedAvatar));
     if (u) {
       const [savedPicks, savedGuess] = await Promise.all([
         db
@@ -304,7 +335,12 @@ export default function Game() {
               {(tab === "weekly" ? leaders : seasonLeaders).map((p, i) => (
                 <tr key={p.user_id}>
                   <td>{i + 1}</td>
-                  <td>{p.username}</td>
+                  <td>
+                    <span className="player-cell">
+                      <Avatar name={p.username} url={p.avatar_url} size={34} />
+                      {p.username}
+                    </span>
+                  </td>
                   <td>{p.score}</td>
                 </tr>
               ))}

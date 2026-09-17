@@ -1,6 +1,7 @@
 import "./style.css";
 import Image from "next/image";
 import { commissioner } from "../lib/server";
+import { logOut } from "./auth/actions";
 export const metadata = {
   title: "Mooberball",
   description: "A fan-made Mikey and Bob fantasy game",
@@ -10,7 +11,7 @@ export default async function Layout({
 }: {
   children: React.ReactNode;
 }) {
-  const { allowed: isCommissioner } = await commissioner();
+  const { user, allowed: isCommissioner } = await commissioner();
 
   return (
     <html lang="en">
@@ -28,7 +29,18 @@ export default async function Layout({
           <nav>
             <a href="/">Play</a>
             {isCommissioner && <a href="/commissioner">Commissioner</a>}
-            <a href="/login">Log in</a>
+            {user ? (
+              <>
+                <a href="/profile">Profile</a>
+                <form action={logOut}>
+                  <button className="nav-link" type="submit">
+                    Log out
+                  </button>
+                </form>
+              </>
+            ) : (
+              <a href="/login">Log in</a>
+            )}
           </nav>
         </header>
         <main>{children}</main>
