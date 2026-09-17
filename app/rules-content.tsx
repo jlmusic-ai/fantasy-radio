@@ -1,4 +1,22 @@
-export default function RulesContent() {
+import { serverClient } from "../lib/server";
+
+const fallbackTopics = [
+  "A Florida story involving nudity",
+  "Something or someone sent to Tha' Crossroads",
+  "Over 15 Mike McCarthy Meows in One Interview Clip",
+  "🎂 Bob's Birthday Wishes 🎂",
+];
+
+export default async function RulesContent() {
+  const db = await serverClient();
+  const { data } = await db
+    .from("categories")
+    .select("name")
+    .eq("active", true)
+    .order("display_order")
+    .limit(7);
+  const topics = data?.length ? data.map((topic) => topic.name) : fallbackTopics;
+
   return (
     <>
       <section className="rules-hero">
@@ -6,7 +24,7 @@ export default function RulesContent() {
         <h1>Mooberball</h1>
         <p className="rules-intro">
           Mooberball is a fan-made fantasy game built around the wonderfully
-          unpredictable world of the Mikey and Bob show. Make your predictions,
+          unpredictable world of Mikey and Bob. Make your predictions,
           listen for the moments you picked, and see how your lineup stacks up
           against the rest of the league.
         </p>
@@ -18,6 +36,15 @@ export default function RulesContent() {
             Log in
           </a>
         </div>
+      </section>
+
+      <section className="topic-cloud" aria-label="Weekly lineup examples">
+        <p className="eyebrow">What might happen this week?</p>
+        <ul>
+          {topics.map((topic) => (
+            <li key={topic}>{topic}</li>
+          ))}
+        </ul>
       </section>
 
       <section className="panel rules-panel">
