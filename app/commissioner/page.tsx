@@ -27,6 +27,10 @@ export default function Commissioner() {
     [note, setNote] = useState(""),
     [occurred, setOccurred] = useState(""),
     [msg, setMsg] = useState(""),
+    [topicMsg, setTopicMsg] = useState(""),
+    [newTopicName, setNewTopicName] = useState(""),
+    [newTopicDescription, setNewTopicDescription] = useState(""),
+    [addingTopic, setAddingTopic] = useState(false),
     [lock, setLock] = useState("06:00");
   async function load() {
     const {
@@ -122,15 +126,43 @@ export default function Commissioner() {
     const name = item.name.trim();
     const description = item.description.trim();
     if (!name || !description) {
-      setMsg("Topic and subtitle are required");
+      setTopicMsg("Topic and subtitle are required.");
       return;
     }
     const { error } = await db
       .from("categories")
       .update({ name, description })
       .eq("id", item.id);
-    setMsg(error ? error.message : "Weekly lineup topic saved");
+    setTopicMsg(error ? error.message : "Weekly lineup topic saved.");
     if (!error) load();
+  }
+  async function addTopic() {
+    const name = newTopicName.trim();
+    const description = newTopicDescription.trim();
+    if (!name || !description) {
+      setTopicMsg("Topic and subtitle are required.");
+      return;
+    }
+    setAddingTopic(true);
+    setTopicMsg("");
+    const nextOrder =
+      Math.max(0, ...categories.map((item) => item.display_order)) + 10;
+    const { error } = await db.from("categories").insert({
+      name,
+      description,
+      active: true,
+      scoring_type: "allocation",
+      display_order: nextOrder,
+    });
+    setAddingTopic(false);
+    if (error) {
+      setTopicMsg(error.message);
+      return;
+    }
+    setNewTopicName("");
+    setNewTopicDescription("");
+    setTopicMsg("New weekly lineup topic added.");
+    await load();
   }
   async function moveTopic(index: number, direction: -1 | 1) {
     const destination = index + direction;
@@ -154,7 +186,7 @@ export default function Commissioner() {
       ),
     );
     const error = results.find((result) => result.error)?.error;
-    setMsg(error ? error.message : "Weekly lineup order updated");
+    setTopicMsg(error ? error.message : "Weekly lineup order updated.");
     if (error) load();
   }
   return !allowed ? (
@@ -191,9 +223,38 @@ export default function Commissioner() {
       <div className="panel">
         <h2>Weekly lineup topics</h2>
         <p className="muted">
-          Edit each topic and subtitle, or use the arrows to change its display
-          order.
+          Add, edit, and reorder the topics players see in their weekly lineup.
         </p>
+        <div className="topic-editor">
+          <h3>Add a new topic</h3>
+          <label>
+            Topic
+            <input
+              maxLength={100}
+              placeholder="Enter the topic title"
+              value={newTopicName}
+              onChange={(e) => setNewTopicName(e.target.value)}
+            />
+          </label>
+          <label>
+            Subtitle
+            <textarea
+              maxLength={250}
+              placeholder="Explain what counts for this topic"
+              value={newTopicDescription}
+              onChange={(e) => setNewTopicDescription(e.target.value)}
+            />
+          </label>
+          <button
+            disabled={
+              addingTopic || !newTopicName.trim() || !newTopicDescription.trim()
+            }
+            onClick={addTopic}
+          >
+            {addingTopic ? "Adding…" : "Add topic"}
+          </button>
+        </div>
+        {topicMsg && <p>{topicMsg}</p>}
         {categories.map((item, index) => (
           <div className="topic-editor" key={item.id}>
             <label>
