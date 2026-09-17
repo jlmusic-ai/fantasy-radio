@@ -1,10 +1,17 @@
 import "./style.css";
 import Image from "next/image";
+import { commissioner } from "../lib/server";
 export const metadata = {
   title: "Mooberball",
   description: "A fan-made Mikey and Bob fantasy game",
 };
-export default function Layout({ children }: { children: React.ReactNode }) {
+export default async function Layout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const { allowed: isCommissioner } = await commissioner();
+
   return (
     <html lang="en">
       <body>
@@ -20,7 +27,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </a>
           <nav>
             <a href="/">Play</a>
-            <a href="/commissioner">Commissioner</a>
+            {isCommissioner && <a href="/commissioner">Commissioner</a>}
             <a href="/login">Log in</a>
           </nav>
         </header>
