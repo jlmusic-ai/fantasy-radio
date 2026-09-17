@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { browserClient } from "../../lib/supabase";
-import { weekStart, seasonStart } from "../../lib/game";
+import { pickingWeek, seasonStart } from "../../lib/game";
 type Category = {
   id: string;
   name: string;
@@ -88,7 +88,7 @@ export default function Commissioner() {
   const [allowed, setAllowed] = useState(false),
     [categories, setCategories] = useState<Category[]>([]),
     [events, setEvents] = useState<Event[]>([]),
-    [week, setWeek] = useState(weekStart(new Date())),
+    [week, setWeek] = useState(pickingWeek(new Date())),
     [category, setCategory] = useState(""),
     [quantity, setQuantity] = useState(1),
     [note, setNote] = useState(""),
@@ -100,7 +100,7 @@ export default function Commissioner() {
     [newTopicName, setNewTopicName] = useState(""),
     [newTopicDescription, setNewTopicDescription] = useState(""),
     [addingTopic, setAddingTopic] = useState(false),
-    [lock, setLock] = useState(`${weekStart(new Date())}T06:00`);
+    [lock, setLock] = useState(`${pickingWeek(new Date())}T06:00`);
   async function load() {
     const {
       data: { user },
@@ -188,6 +188,22 @@ export default function Commissioner() {
     );
     if (!error) await load();
   }
+  async function lockWeekNow() {
+    if (!confirm(`Lock picks immediately for the week of ${week}?`)) return;
+    setSavingWeek(true);
+    setWeekMsg("");
+    const now = new Date().toISOString();
+    const { error } = await db
+      .from("weeks")
+      .upsert({ id: week, lock_at: now, season_start: seasonStart(week) });
+    setSavingWeek(false);
+    setWeekMsg(
+      error
+        ? `Could not lock picks: ${error.message}`
+        : "Picks are now locked.",
+    );
+    if (!error) await load();
+  }
   function editTopic(id: string, field: "name" | "description", value: string) {
     setCategories((items) =>
       items.map((item) =>
@@ -271,6 +287,12 @@ export default function Commissioner() {
     <>
       <h1>Commissioner dashboard</h1>
       <div className="panel">
+        <h2>Weekly picking schedule</h2>
+        <p className="muted">
+          Automatic schedule: next week opens every Friday at 5:00 p.m. and
+          locks Monday at 6:00 a.m., Pittsburgh time. Use these controls only
+          when you need to override that schedule.
+        </p>
         <DatePicker
           label="Week beginning Monday"
           type="date"
@@ -283,9 +305,14 @@ export default function Commissioner() {
           value={lock}
           onChange={setLock}
         />
-        <button disabled={!lock || savingWeek} onClick={createWeek}>
-          {savingWeek ? "Saving…" : "Create / update week"}
-        </button>
+        <div className="topic-actions">
+          <button disabled={!lock || savingWeek} onClick={createWeek}>
+            {savingWeek ? "Saving…" : "Save deadline override"}
+          </button>
+          <button disabled={savingWeek} onClick={lockWeekNow}>
+            Lock picks now
+          </button>
+        </div>
         {lock &&
           new Date(pittsburghDateTimeToUtc(lock)).getTime() <= Date.now() && (
             <p className="error">
@@ -294,8 +321,8 @@ export default function Commissioner() {
           )}
         {weekMsg && <p>{weekMsg}</p>}
         <p className="muted">
-          Create each week before players submit picks. Updating a lock after
-          submissions may affect fairness.
+          Deadline overrides take effect immediately and may affect fairness
+          after players have submitted picks.
         </p>
       </div>
       <div className="panel">

@@ -1,7 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
 import { browserClient } from "../lib/supabase";
-import { birthdayBonus, weekStart, seasonStart } from "../lib/game";
+import {
+  birthdayBonus,
+  defaultLockAt,
+  pickingWeek,
+  seasonStart,
+} from "../lib/game";
 type Category = {
   id: string;
   name: string;
@@ -20,7 +25,7 @@ export default function Game() {
     [events, setEvents] = useState<Record<string, number>>({}),
     [leaders, setLeaders] = useState<Score[]>([]),
     [seasonLeaders, setSeasonLeaders] = useState<Score[]>([]),
-    [week, setWeek] = useState(weekStart(new Date())),
+    [week, setWeek] = useState(pickingWeek(new Date())),
     [locked, setLocked] = useState(false),
     [message, setMessage] = useState(""),
     [tab, setTab] = useState("picks"),
@@ -31,7 +36,7 @@ export default function Game() {
       data: { user: u },
     } = await db.auth.getUser();
     setUser(u?.id || null);
-    const w = weekStart(new Date());
+    const w = pickingWeek(new Date());
     setWeek(w);
     const [cats, ws, ev, lb, sl] = await Promise.all([
       db
@@ -56,7 +61,8 @@ export default function Game() {
         .limit(100),
     ]);
     setCategories((cats.data || []) as Category[]);
-    setLocked(!ws.data || Date.now() >= new Date(ws.data.lock_at).getTime());
+    const lockAt = ws.data?.lock_at || defaultLockAt(w);
+    setLocked(Date.now() >= new Date(lockAt).getTime());
     const counts: Record<string, number> = {};
     (ev.data || []).forEach(
       (e) =>
@@ -90,6 +96,7 @@ export default function Game() {
   }
   useEffect(() => {
     load();
+    const rolloverCheck = window.setInterval(load, 60_000);
     const channel = db
       .channel("scores")
       .on(
@@ -99,6 +106,7 @@ export default function Game() {
       )
       .subscribe();
     return () => {
+      window.clearInterval(rolloverCheck);
       db.removeChannel(channel);
     };
   }, []);

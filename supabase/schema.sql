@@ -15,7 +15,34 @@ create or replace function public.is_commissioner() returns boolean language sql
 revoke all on function public.is_commissioner() from public,anon;
 grant execute on function public.is_commissioner() to authenticated;
 -- Lineup validation is performed atomically by the submit_lineup function below.
-create or replace function public.submit_lineup(p_week date,p_picks jsonb,p_birthday_guess integer) returns void language plpgsql security definer set search_path='' as $$ declare lock_time timestamptz; active_n integer; input_n integer; total integer; begin if auth.uid() is null then raise exception 'Login required'; end if; select lock_at into lock_time from public.weeks where id=p_week for update; if lock_time is null or now()>=lock_time then raise exception 'Lineup is locked or week is missing'; end if; if jsonb_typeof(p_picks)<>'array' or p_birthday_guess not between 0 and 500 then raise exception 'Invalid lineup'; end if; select count(*) into active_n from public.categories where active and scoring_type='allocation'; select count(*),coalesce(sum((x->>'points')::integer),0) into input_n,total from jsonb_array_elements(p_picks) x; if input_n<>active_n or total<>100 or exists(select 1 from jsonb_array_elements(p_picks) x where (x->>'points')::integer not between 0 and 25) or (select count(distinct x->>'category_id') from jsonb_array_elements(p_picks) x)<>active_n or exists(select 1 from jsonb_array_elements(p_picks) x left join public.categories c on c.id=(x->>'category_id')::uuid and c.active and c.scoring_type='allocation' where c.id is null) then raise exception 'Invalid 100-point lineup'; end if; delete from public.picks where user_id=auth.uid() and week_id=p_week; insert into public.picks(user_id,week_id,category_id,points) select auth.uid(),p_week,(x->>'category_id')::uuid,(x->>'points')::integer from jsonb_array_elements(p_picks) x; insert into public.birthday_predictions(user_id,week_id,guess) values(auth.uid(),p_week,p_birthday_guess) on conflict(user_id,week_id) do update set guess=excluded.guess; end $$;
+create or replace function public.submit_lineup(p_week date,p_picks jsonb,p_birthday_guess integer) returns void language plpgsql security definer set search_path='' as $$
+declare
+  lock_time timestamptz;
+  local_now timestamp;
+  current_monday date;
+  active_week date;
+  active_n integer;
+  input_n integer;
+  total integer;
+begin
+  if auth.uid() is null then raise exception 'Login required'; end if;
+  local_now := now() at time zone 'America/New_York';
+  current_monday := local_now::date-(extract(isodow from local_now)::integer-1);
+  active_week := current_monday+case when extract(isodow from local_now)>5 or (extract(isodow from local_now)=5 and local_now::time>=time '17:00') then 7 else 0 end;
+  if p_week<>active_week then raise exception 'This is not the active picking week'; end if;
+  insert into public.weeks(id,lock_at,season_start)
+  values(p_week,(p_week::timestamp+time '06:00') at time zone 'America/New_York',date_trunc('quarter',p_week::timestamp)::date)
+  on conflict(id) do nothing;
+  select lock_at into lock_time from public.weeks where id=p_week for update;
+  if lock_time is null or now()>=lock_time then raise exception 'Lineup is locked'; end if;
+  if jsonb_typeof(p_picks)<>'array' or p_birthday_guess not between 0 and 500 then raise exception 'Invalid lineup'; end if;
+  select count(*) into active_n from public.categories where active and scoring_type='allocation';
+  select count(*),coalesce(sum((x->>'points')::integer),0) into input_n,total from jsonb_array_elements(p_picks) x;
+  if input_n<>active_n or total<>100 or exists(select 1 from jsonb_array_elements(p_picks) x where (x->>'points')::integer not between 0 and 25) or (select count(distinct x->>'category_id') from jsonb_array_elements(p_picks) x)<>active_n or exists(select 1 from jsonb_array_elements(p_picks) x left join public.categories c on c.id=(x->>'category_id')::uuid and c.active and c.scoring_type='allocation' where c.id is null) then raise exception 'Invalid 100-point lineup'; end if;
+  delete from public.picks where user_id=auth.uid() and week_id=p_week;
+  insert into public.picks(user_id,week_id,category_id,points) select auth.uid(),p_week,(x->>'category_id')::uuid,(x->>'points')::integer from jsonb_array_elements(p_picks) x;
+  insert into public.birthday_predictions(user_id,week_id,guess) values(auth.uid(),p_week,p_birthday_guess) on conflict(user_id,week_id) do update set guess=excluded.guess;
+end $$;
 create or replace view public.weekly_scores with (security_invoker=true) as with base as (select p.week_id,p.user_id,pr.username,coalesce(sum(p.points*coalesce(e.quantity,0)),0)::bigint as base_score from picks p join profiles pr on pr.id=p.user_id join categories pc on pc.id=p.category_id and pc.scoring_type='allocation' left join (select week_id,category_id,sum(quantity) quantity from events group by week_id,category_id)e on e.week_id=p.week_id and e.category_id=p.category_id group by p.week_id,p.user_id,pr.username), birthday_actual as (select e.week_id,coalesce(sum(e.quantity),0)::integer actual from events e join categories c on c.id=e.category_id where c.scoring_type='closest_guess' group by e.week_id) select b.week_id,b.user_id,b.username,(b.base_score+case when bp.guess is null then 0 else greatest(0,50-abs(bp.guess-coalesce(ba.actual,0))*5) end)::bigint score from base b left join birthday_predictions bp on bp.week_id=b.week_id and bp.user_id=b.user_id left join birthday_actual ba on ba.week_id=b.week_id;
 create or replace view public.season_scores with (security_invoker=true) as select w.season_start,s.user_id,s.username,sum(s.score)::bigint score from weekly_scores s join weeks w on w.id=s.week_id group by w.season_start,s.user_id,s.username;
 alter table profiles enable row level security; alter table categories enable row level security; alter table weeks enable row level security; alter table picks enable row level security; alter table birthday_predictions enable row level security; alter table events enable row level security;
