@@ -17,6 +17,11 @@ type Category = {
   display_order: number;
 };
 type Pick = { category_id: string; points: number };
+type PlayerProfile = {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+};
 type Score = {
   username: string;
   avatar_url: string | null;
@@ -57,7 +62,7 @@ export default function Game() {
       weekRef.current = w;
       setWeek(w);
     }
-    const [cats, ws, ev, lb, sl] = await Promise.all([
+    const [cats, ws, ev, lb, sl, profiles] = await Promise.all([
       db
         .from("categories")
         .select("id,name,description,scoring_type,display_order")
@@ -78,6 +83,10 @@ export default function Game() {
         .eq("season_start", FIRST_SEASON_START)
         .order("score", { ascending: false })
         .limit(100),
+      db
+        .from("profiles")
+        .select("id,username,avatar_url")
+        .order("username"),
     ]);
     setCategories((cats.data || []) as Category[]);
     const lockAt = ws.data?.lock_at || defaultLockAt(w);
@@ -88,8 +97,26 @@ export default function Game() {
         (counts[e.category_id] = (counts[e.category_id] || 0) + e.quantity),
     );
     setEvents(counts);
-    const rawLeaders = (lb.data || []) as Score[];
-    const rawSeasonLeaders = (sl.data || []) as Score[];
+    const allPlayers = (profiles.data || []) as PlayerProfile[];
+    const includeZeroScores = (scoredPlayers: Score[]) => {
+      if (!allPlayers.length) return scoredPlayers;
+      const scoresByUser = new Map(
+        scoredPlayers.map((player) => [player.user_id, player.score]),
+      );
+      return allPlayers
+        .map((player) => ({
+          user_id: player.id,
+          username: player.username,
+          avatar_url: player.avatar_url,
+          score: scoresByUser.get(player.id) ?? 0,
+        }))
+        .sort(
+          (a, b) =>
+            b.score - a.score || a.username.localeCompare(b.username),
+        );
+    };
+    const rawLeaders = includeZeroScores((lb.data || []) as Score[]);
+    const rawSeasonLeaders = includeZeroScores((sl.data || []) as Score[]);
     const avatarPaths = [
       ...new Set(
         [...rawLeaders, ...rawSeasonLeaders]
