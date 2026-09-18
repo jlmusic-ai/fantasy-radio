@@ -66,4 +66,38 @@ create policy avatars_select_authenticated on storage.objects for select to auth
 create policy avatars_insert_own on storage.objects for insert to authenticated with check(bucket_id='avatars' and (storage.foldername(name))[1]=(select auth.uid())::text);
 create policy avatars_update_own on storage.objects for update to authenticated using(bucket_id='avatars' and (storage.foldername(name))[1]=(select auth.uid())::text) with check(bucket_id='avatars' and (storage.foldername(name))[1]=(select auth.uid())::text);
 create policy avatars_delete_own on storage.objects for delete to authenticated using(bucket_id='avatars' and (storage.foldername(name))[1]=(select auth.uid())::text);
+
+create or replace function public.admin_list_users()
+returns table(id uuid,email text,username text,created_at timestamptz,is_commissioner boolean)
+language plpgsql security definer set search_path=''
+as $$
+begin
+  if not exists(select 1 from public.profiles p where p.id=(select auth.uid()) and p.is_commissioner) then
+    raise exception 'Commissioner access required' using errcode='42501';
+  end if;
+  return query select u.id,u.email::text,p.username,u.created_at,p.is_commissioner
+    from auth.users u join public.profiles p on p.id=u.id order by u.created_at desc;
+end;
+$$;
+revoke all on function public.admin_list_users() from public,anon;
+grant execute on function public.admin_list_users() to authenticated;
+
+create or replace function public.admin_delete_user(target_user_id uuid)
+returns void language plpgsql security definer set search_path=''
+as $$
+begin
+  if not exists(select 1 from public.profiles p where p.id=(select auth.uid()) and p.is_commissioner) then
+    raise exception 'Commissioner access required' using errcode='42501';
+  end if;
+  if target_user_id=(select auth.uid()) then raise exception 'You cannot delete your own account here'; end if;
+  if exists(select 1 from public.profiles p where p.id=target_user_id and p.is_commissioner) then
+    raise exception 'Commissioner accounts cannot be deleted here';
+  end if;
+  delete from storage.objects where bucket_id='avatars' and name like target_user_id::text||'/%';
+  delete from auth.users where id=target_user_id;
+  if not found then raise exception 'User not found'; end if;
+end;
+$$;
+revoke all on function public.admin_delete_user(uuid) from public,anon;
+grant execute on function public.admin_delete_user(uuid) to authenticated;
 insert into categories(name,description,scoring_type,display_order) values ('Pittsburgh Scanner','A distinct qualifying scanner story','allocation',10),('A Florida story involving nudity','A distinct Florida story involving nudity','allocation',20),('Over 15 Mike McCarthy Meows in One Interview Clip','A qualifying interview clip containing more than 15 Mike McCarthy meows','allocation',30),('Something or someone sent to Tha’ Crossroads','A distinct instance of something or someone being sent to Tha’ Crossroads','allocation',40),('Listener Talkback','A distinct listener talkback played on air','allocation',50),('🎂 Bob’s Birthday Wishes 🎂','Guess how many times Bob will be wished a Happy Birthday this week.','closest_guess',60) on conflict(name) do nothing;
