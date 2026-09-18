@@ -1,11 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { browserClient } from "../../lib/supabase";
-import { formatDate, pickingWeek, seasonStart } from "../../lib/game";
+import { pickingWeek, seasonStart } from "../../lib/game";
 type Category = {
   id: string;
   name: string;
-  description: string;
   scoring_type: "allocation" | "closest_guess";
   display_order: number;
 };
@@ -31,30 +30,6 @@ function formatPittsburghDateTime(iso: string) {
   const value = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((part) => part.type === type)?.value || "";
   return `${value("year")}-${value("month")}-${value("day")}T${value("hour")}:${value("minute")}`;
-}
-
-function formatPittsburghDisplayDateTime(iso: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: PITTSBURGH,
-    month: "2-digit",
-    day: "2-digit",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  })
-    .format(new Date(iso))
-    .replace(/^(\d{2})\/(\d{2})\/(\d{4})/, "$1-$2-$3");
-}
-
-function formatPickerValue(value: string) {
-  if (!value) return "";
-  const [date, time] = value.split("T");
-  if (!time) return formatDate(date);
-  const [hours, minutes] = time.split(":").map(Number);
-  const suffix = hours >= 12 ? "PM" : "AM";
-  const displayHour = hours % 12 || 12;
-  return `${formatDate(date)} ${displayHour}:${String(minutes).padStart(2, "0")} ${suffix}`;
 }
 
 function pittsburghDateTimeToUtc(local: string) {
@@ -103,7 +78,6 @@ function DatePicker({
           📅 Choose
         </button>
       </div>
-      {value && <small className="muted">Selected: {formatPickerValue(value)}</small>}
     </label>
   );
 }
@@ -123,7 +97,6 @@ export default function Commissioner() {
     [savingWeek, setSavingWeek] = useState(false),
     [topicMsg, setTopicMsg] = useState(""),
     [newTopicName, setNewTopicName] = useState(""),
-    [newTopicDescription, setNewTopicDescription] = useState(""),
     [addingTopic, setAddingTopic] = useState(false),
     [lock, setLock] = useState(`${pickingWeek(new Date())}T06:00`);
   async function load() {
@@ -141,7 +114,7 @@ export default function Commissioner() {
     const [c, e, savedWeek] = await Promise.all([
       db
         .from("categories")
-        .select("id,name,description,scoring_type,display_order")
+        .select("id,name,scoring_type,display_order")
         .eq("active", true)
         .order("display_order")
         .order("name"),
@@ -214,8 +187,7 @@ export default function Commissioner() {
     if (!error) await load();
   }
   async function lockWeekNow() {
-    if (!confirm(`Lock picks immediately for the week of ${formatDate(week)}?`))
-      return;
+    if (!confirm(`Lock picks immediately for the week of ${week}?`)) return;
     setSavingWeek(true);
     setWeekMsg("");
     const now = new Date().toISOString();
@@ -230,32 +202,30 @@ export default function Commissioner() {
     );
     if (!error) await load();
   }
-  function editTopic(id: string, field: "name" | "description", value: string) {
+  function editTopic(id: string, value: string) {
     setCategories((items) =>
       items.map((item) =>
-        item.id === id ? { ...item, [field]: value } : item,
+        item.id === id ? { ...item, name: value } : item,
       ),
     );
   }
   async function saveTopic(item: Category) {
     const name = item.name.trim();
-    const description = item.description.trim();
-    if (!name || !description) {
-      setTopicMsg("Topic and subtitle are required.");
+    if (!name) {
+      setTopicMsg("Topic name is required.");
       return;
     }
     const { error } = await db
       .from("categories")
-      .update({ name, description })
+      .update({ name })
       .eq("id", item.id);
     setTopicMsg(error ? error.message : "Weekly lineup topic saved.");
     if (!error) load();
   }
   async function addTopic() {
     const name = newTopicName.trim();
-    const description = newTopicDescription.trim();
-    if (!name || !description) {
-      setTopicMsg("Topic and subtitle are required.");
+    if (!name) {
+      setTopicMsg("Topic name is required.");
       return;
     }
     setAddingTopic(true);
@@ -264,7 +234,7 @@ export default function Commissioner() {
       Math.max(0, ...categories.map((item) => item.display_order)) + 10;
     const { error } = await db.from("categories").insert({
       name,
-      description,
+      description: "",
       active: true,
       scoring_type: "allocation",
       display_order: nextOrder,
@@ -275,7 +245,6 @@ export default function Commissioner() {
       return;
     }
     setNewTopicName("");
-    setNewTopicDescription("");
     setTopicMsg("New weekly lineup topic added.");
     await load();
   }
@@ -367,19 +336,8 @@ export default function Commissioner() {
               onChange={(e) => setNewTopicName(e.target.value)}
             />
           </label>
-          <label>
-            Subtitle
-            <textarea
-              maxLength={250}
-              placeholder="Explain what counts for this topic"
-              value={newTopicDescription}
-              onChange={(e) => setNewTopicDescription(e.target.value)}
-            />
-          </label>
           <button
-            disabled={
-              addingTopic || !newTopicName.trim() || !newTopicDescription.trim()
-            }
+            disabled={addingTopic || !newTopicName.trim()}
             onClick={addTopic}
           >
             {addingTopic ? "Adding…" : "Add topic"}
@@ -393,17 +351,7 @@ export default function Commissioner() {
               <input
                 maxLength={100}
                 value={item.name}
-                onChange={(e) => editTopic(item.id, "name", e.target.value)}
-              />
-            </label>
-            <label>
-              Subtitle
-              <textarea
-                maxLength={250}
-                value={item.description}
-                onChange={(e) =>
-                  editTopic(item.id, "description", e.target.value)
-                }
+                onChange={(e) => editTopic(item.id, e.target.value)}
               />
             </label>
             <div className="topic-actions">
@@ -478,8 +426,7 @@ export default function Commissioner() {
               {e.quantity}
               <br />
               <small className="muted">
-                {formatPittsburghDisplayDateTime(e.occurred_at)}
-                {e.note ? ` · ${e.note}` : ""}
+                {new Date(e.occurred_at).toLocaleString()} · {e.note}
               </small>
             </p>
             <button onClick={() => remove(e.id)}>Delete</button>
