@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { browserClient } from "../lib/supabase";
 import {
   birthdayBonus,
@@ -37,14 +37,26 @@ export default function Game() {
     [message, setMessage] = useState(""),
     [tab, setTab] = useState("picks"),
     [loading, setLoading] = useState(true);
-  async function load() {
-    setLoading(true);
+  const weekRef = useRef(week);
+
+  async function load({
+    showLoading = true,
+    hydratePicks = true,
+  }: {
+    showLoading?: boolean;
+    hydratePicks?: boolean;
+  } = {}) {
+    if (showLoading) setLoading(true);
     const {
       data: { user: u },
     } = await db.auth.getUser();
     setUser(u?.id || null);
     const w = pickingWeek(new Date());
-    setWeek(w);
+    const weekChanged = weekRef.current !== w;
+    if (weekChanged) {
+      weekRef.current = w;
+      setWeek(w);
+    }
     const [cats, ws, ev, lb, sl] = await Promise.all([
       db
         .from("categories")
@@ -103,7 +115,7 @@ export default function Game() {
     });
     setLeaders(rawLeaders.map(withSignedAvatar));
     setSeasonLeaders(rawSeasonLeaders.map(withSignedAvatar));
-    if (u) {
+    if (u && (hydratePicks || weekChanged)) {
       const [savedPicks, savedGuess] = await Promise.all([
         db
           .from("picks")
@@ -123,18 +135,24 @@ export default function Game() {
       );
       setPicks(values);
       setBirthdayGuess(savedGuess.data?.guess ?? null);
+    } else if (!u && weekChanged) {
+      setPicks({});
+      setBirthdayGuess(null);
     }
-    setLoading(false);
+    if (showLoading) setLoading(false);
   }
   useEffect(() => {
     load();
-    const rolloverCheck = window.setInterval(load, 60_000);
+    const rolloverCheck = window.setInterval(
+      () => load({ showLoading: false, hydratePicks: false }),
+      60_000,
+    );
     const channel = db
       .channel("scores")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "events" },
-        () => load(),
+        () => load({ showLoading: false, hydratePicks: false }),
       )
       .subscribe();
     return () => {
@@ -177,7 +195,9 @@ export default function Game() {
         ? "Lineup and birthday guess saved successfully."
         : data.error || "Unable to save",
     );
-    if (response.ok) load();
+    if (response.ok) {
+      await load({ showLoading: false, hydratePicks: true });
+    }
   }
   return (
     <>
