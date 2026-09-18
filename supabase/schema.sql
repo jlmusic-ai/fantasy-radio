@@ -142,7 +142,7 @@ returns integer
 language plpgsql
 security invoker
 set search_path=''
-as $
+as $function$
 declare
   current_monday date;
   current_total integer;
@@ -213,7 +213,7 @@ begin
 
   return new_total;
 end;
-$;
+$function$;
 revoke all on function public.adjust_weekly_occurrences(date,uuid,integer,integer)
 from public,anon;
 grant execute on function public.adjust_weekly_occurrences(date,uuid,integer,integer)
