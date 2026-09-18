@@ -198,8 +198,11 @@ export default function Game() {
       (a, c) => a + (picks[c.id] || 0) * (events[c.id] || 0),
       0,
     ),
+    birthdayScored =
+      birthdayCategory !== undefined &&
+      Object.prototype.hasOwnProperty.call(events, birthdayCategory.id),
     birthdayActual = birthdayCategory ? events[birthdayCategory.id] || 0 : 0,
-    bonus = birthdayBonus(birthdayGuess, birthdayActual),
+    bonus = birthdayScored ? birthdayBonus(birthdayGuess, birthdayActual) : 0,
     score = baseScore + bonus;
   async function save() {
     setMessage("");
@@ -291,35 +294,67 @@ export default function Game() {
               accepting lineups.
             </p>
           )}
-          {allocationCategories.map((c) => (
-            <div key={c.id} className="panel">
-              <div className="row">
-                <strong>{c.name}</strong>
-                <strong>{picks[c.id] || 0} pts</strong>
+          {allocationCategories.map((c) => {
+            const currentPoints = picks[c.id] || 0;
+            const pointsRemaining = Math.max(0, 100 - total);
+            const categoryMaximum = Math.min(
+              25,
+              100 - (total - currentPoints),
+            );
+            return (
+              <div key={c.id} className="panel">
+                <div className="row">
+                  <strong>{c.name}</strong>
+                  <strong>{currentPoints} pts</strong>
+                </div>
+                <p className="muted">
+                  {events[c.id] || 0} occurrences ·{" "}
+                  {currentPoints * (events[c.id] || 0)} points earned
+                </p>
+                <input
+                  aria-label={`Points for ${c.name}`}
+                  type="range"
+                  min="0"
+                  max={categoryMaximum}
+                  step="1"
+                  value={currentPoints}
+                  disabled={locked || !user}
+                  onChange={(e) => {
+                    const requestedPoints = Number(e.target.value);
+                    setPicks((currentPicks) => {
+                      const existingPoints = currentPicks[c.id] || 0;
+                      const otherPoints = allocationCategories.reduce(
+                        (sum, category) =>
+                          category.id === c.id
+                            ? sum
+                            : sum + (currentPicks[category.id] || 0),
+                        0,
+                      );
+                      return {
+                        ...currentPicks,
+                        [c.id]: Math.min(
+                          requestedPoints,
+                          25,
+                          Math.max(0, 100 - otherPoints),
+                        ),
+                      };
+                    });
+                  }}
+                />
+                <div className="slider-status" aria-live="polite">
+                  <span>{currentPoints} points on this topic</span>
+                  <strong>{pointsRemaining} points left</strong>
+                </div>
               </div>
-              <p className="muted">
-                {events[c.id] || 0} occurrences ·{" "}
-                {(picks[c.id] || 0) * (events[c.id] || 0)} points earned
-              </p>
-              <input
-                aria-label={`Points for ${c.name}`}
-                type="range"
-                min="0"
-                max="25"
-                step="1"
-                value={picks[c.id] || 0}
-                disabled={locked || !user}
-                onChange={(e) =>
-                  setPicks((p) => ({ ...p, [c.id]: Number(e.target.value) }))
-                }
-              />
-            </div>
-          ))}
+            );
+          })}
           {birthdayCategory && (
             <div className="panel">
               <h3>{birthdayCategory.name}</h3>
               <p className="muted">
-                {birthdayActual} occurrences · {bonus} bonus points earned
+                {birthdayScored
+                  ? `${birthdayActual} occurrences · ${bonus} bonus points earned`
+                  : "Bonus pending until this week is scored."}
               </p>
               <label>
                 Your guess
@@ -345,7 +380,7 @@ export default function Game() {
             </div>
           )}
           <div className="row">
-            <strong>{100 - total} points remaining</strong>
+            <strong>{Math.max(0, 100 - total)} points remaining</strong>
             <button
               disabled={
                 !user ||

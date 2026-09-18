@@ -446,3 +446,21 @@ hr {
     min-height: 60px;
   }
 }
+
+.slider-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: -4px;
+  color: #c7c7c7;
+  font-size: 13px;
+}
+.slider-status strong {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border: 1px solid var(--gold-dark);
+  border-radius: 999px;
+  background: #29240f;
+  color: var(--gold);
+}
