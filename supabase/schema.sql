@@ -49,7 +49,15 @@ begin
   active_week := current_monday+case when extract(isodow from local_now)>5 or (extract(isodow from local_now)=5 and local_now::time>=time '17:00') then 7 else 0 end;
   if p_week<>active_week then raise exception 'This is not the active picking week'; end if;
   insert into public.weeks(id,lock_at,season_start)
-  values(p_week,(p_week::timestamp+time '06:00') at time zone 'America/New_York',date_trunc('quarter',p_week::timestamp)::date)
+  values(
+    p_week,
+    (p_week::timestamp+time '06:00') at time zone 'America/New_York',
+    case
+      when p_week between date '2026-10-05' and date '2026-11-20'
+        then date '2026-10-05'
+      else p_week
+    end
+  )
   on conflict(id) do nothing;
   select lock_at into lock_time from public.weeks where id=p_week for update;
   if lock_time is null or now()>=lock_time then raise exception 'Lineup is locked'; end if;
@@ -62,7 +70,11 @@ begin
   insert into public.birthday_predictions(user_id,week_id,guess) values(auth.uid(),p_week,p_birthday_guess) on conflict(user_id,week_id) do update set guess=excluded.guess;
 end $$;
 create or replace view public.weekly_scores with (security_invoker=true) as with base as (select p.week_id,p.user_id,pr.username,pr.avatar_url,coalesce(sum(p.points*coalesce(e.quantity,0)),0)::bigint as base_score from picks p join profiles pr on pr.id=p.user_id join categories pc on pc.id=p.category_id and pc.scoring_type='allocation' left join (select week_id,category_id,sum(quantity) quantity from events group by week_id,category_id)e on e.week_id=p.week_id and e.category_id=p.category_id group by p.week_id,p.user_id,pr.username,pr.avatar_url), birthday_actual as (select e.week_id,coalesce(sum(e.quantity),0)::integer actual from events e join categories c on c.id=e.category_id where c.scoring_type='closest_guess' group by e.week_id) select b.week_id,b.user_id,b.username,(b.base_score+case when bp.guess is null then 0 else greatest(0,50-abs(bp.guess-coalesce(ba.actual,0))*5) end)::bigint score,b.avatar_url from base b left join birthday_predictions bp on bp.week_id=b.week_id and bp.user_id=b.user_id left join birthday_actual ba on ba.week_id=b.week_id;
-create or replace view public.season_scores with (security_invoker=true) as select w.season_start,s.user_id,s.username,sum(s.score)::bigint score,s.avatar_url from weekly_scores s join weeks w on w.id=s.week_id group by w.season_start,s.user_id,s.username,s.avatar_url;
+create or replace view public.season_scores with (security_invoker=true) as
+select date '2026-10-05' as season_start,s.user_id,s.username,sum(s.score)::bigint score,s.avatar_url
+from weekly_scores s
+where s.week_id between date '2026-10-05' and date '2026-11-20'
+group by s.user_id,s.username,s.avatar_url;
 alter table profiles enable row level security; alter table categories enable row level security; alter table weeks enable row level security; alter table picks enable row level security; alter table birthday_predictions enable row level security; alter table events enable row level security;
 create policy profiles_read on profiles for select to authenticated using(true);
 create policy profiles_update on profiles for update to authenticated using(id=(select auth.uid())) with check(id=(select auth.uid()));

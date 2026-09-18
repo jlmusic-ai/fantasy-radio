@@ -15,7 +15,7 @@ A fan-made fantasy game for a Pittsburgh morning radio show. This is source code
 ## Rules and limitations
 
 - Exactly 100 points per lineup; 0–25 points for every active category; every occurrence earns the allocated points.
-- All users share one public weekly and quarterly-season leaderboard. Seasons are calendar quarters (Jan–Mar, Apr–Jun, Jul–Sep, Oct–Dec). Week belongs to the quarter in which its Monday falls.
+- All users share one public weekly leaderboard. The inaugural season leaderboard includes only weeks beginning 10-05-2026 through 11-16-2026; the season ends after scoring on Friday 11-20-2026. Test weeks before 10-05-2026 do not count toward season rankings.
 - Monday lock is configurable by the commissioner. Weeks must be created manually; the app does not automatically create the next week.
 - Categories are fixed in the initial game; commissioner can change them in Supabase before launch. Changing active categories midseason would invalidate the fixed-lineup design and must be avoided.
 - The homepage uses current Pittsburgh week. Public scores and picks are readable only by logged-in users under the provided database policies. The demo homepage is visible to visitors but queries require sign-in.

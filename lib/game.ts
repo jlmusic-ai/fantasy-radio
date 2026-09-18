@@ -1,4 +1,6 @@
 export const ZONE = "America/New_York";
+export const FIRST_SEASON_START = "2026-10-05";
+export const FIRST_SEASON_END = "2026-11-20";
 
 export function formatDate(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
@@ -58,9 +60,9 @@ export function defaultLockAt(week: string) {
   return new Date(guess.getTime() - offset * 60000).toISOString();
 }
 export function seasonStart(week: string) {
-  const d = new Date(week + "T12:00:00Z");
-  const month = Math.floor(d.getUTCMonth() / 3) * 3;
-  return `${d.getUTCFullYear()}-${String(month + 1).padStart(2, "0")}-01`;
+  return week >= FIRST_SEASON_START && week <= FIRST_SEASON_END
+    ? FIRST_SEASON_START
+    : week;
 }
 export function validPicks(
   picks: { category_id: string; points: number }[],

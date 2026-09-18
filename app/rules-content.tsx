@@ -109,10 +109,11 @@ export default async function RulesContent() {
 
       <section className="panel season-callout">
         <p className="eyebrow">Inaugural season</p>
-        <h2>10-01-2026 through 11-27-2026</h2>
+        <h2>10-05-2026 through 11-20-2026</h2>
         <p className="muted">
-          The first Mooberball season will run for eight weeks. Join before the
-          opening week so you do not miss your first chance to score.
+          The first Mooberball season begins Monday, October 5, and ends Friday,
+          November 20. Only weekly scores from this seven-week season count
+          toward the inaugural season standings.
         </p>
       </section>
     </>
