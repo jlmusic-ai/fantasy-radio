@@ -8,9 +8,27 @@ create table public.birthday_predictions (user_id uuid not null references publi
 create table public.events (id uuid primary key default gen_random_uuid(), week_id date not null references public.weeks(id), category_id uuid not null references public.categories(id), occurred_at timestamptz not null, quantity integer not null check(quantity between 1 and 100), note text not null default '', created_by uuid not null references public.profiles(id), created_at timestamptz not null default now());
 create index events_week_category on public.events(week_id,category_id);
 create index picks_week_user on public.picks(week_id,user_id);
-create or replace function public.new_profile() returns trigger language plpgsql security definer set search_path='' as $$ begin insert into public.profiles(id,username) values(new.id,'player_'||left(replace(new.id::text,'-',''),20)); return new; end $$;
+create unique index profiles_username_lower_unique on public.profiles(lower(username));
+create or replace function public.new_profile() returns trigger language plpgsql security definer set search_path='' as $$
+declare chosen_username text;
+begin
+  chosen_username:=trim(new.raw_user_meta_data->>'username');
+  if chosen_username is null or length(chosen_username) not between 3 and 30 then
+    chosen_username:='player_'||left(replace(new.id::text,'-',''),20);
+  end if;
+  insert into public.profiles(id,username) values(new.id,chosen_username);
+  return new;
+end $$;
 revoke all on function public.new_profile() from public,anon,authenticated;
 create trigger create_profile after insert on auth.users for each row execute function public.new_profile();
+create or replace function public.username_available(requested_username text)
+returns boolean language sql stable security definer set search_path=''
+as $$
+  select length(trim(requested_username)) between 3 and 30
+    and not exists(select 1 from public.profiles where lower(username)=lower(trim(requested_username)));
+$$;
+revoke all on function public.username_available(text) from public;
+grant execute on function public.username_available(text) to anon,authenticated;
 create or replace function public.is_commissioner() returns boolean language sql stable security definer set search_path=public as $$select exists(select 1 from profiles where id=auth.uid() and is_commissioner)$$;
 revoke all on function public.is_commissioner() from public,anon;
 grant execute on function public.is_commissioner() to authenticated;

@@ -22,17 +22,34 @@ export default function Signup() {
     setSubmitting(true);
     setMessage("");
     const db = browserClient();
-    const { data, error } = await db.auth.signUp({ email, password });
+    const cleanUsername = username.trim();
+    const { data: usernameAvailable, error: availabilityError } = await db.rpc(
+      "username_available",
+      { requested_username: cleanUsername },
+    );
+    if (availabilityError || !usernameAvailable) {
+      setSubmitting(false);
+      setMessage(
+        availabilityError
+          ? "We could not check that username. Please try again."
+          : "That username is already taken. Please choose another one.",
+      );
+      return;
+    }
+    const { data, error } = await db.auth.signUp({
+      email,
+      password,
+      options: { data: { username: cleanUsername } },
+    });
     if (error) {
       setSubmitting(false);
       setMessage(signupErrorMessage(error));
       return;
     }
     if (data.session && data.user) {
-      const { error: profileError } = await db.from("profiles").update({ username }).eq("id", data.user.id);
       setSubmitting(false);
-      setMessage(profileError ? profileError.message : "Account created!");
-      if (!profileError) window.location.href = "/";
+      setMessage("Account created!");
+      window.location.href = "/";
       return;
     }
     setSubmitting(false);
@@ -43,7 +60,7 @@ export default function Signup() {
     <div className="panel" style={{ maxWidth: 480, margin: "auto" }}>
       <h1>Create an account</h1>
       <form onSubmit={submit}>
-        <label>Username<input minLength={3} maxLength={30} required value={username} onChange={(event) => setUsername(event.target.value)} /></label>
+        <label>Username<input minLength={3} maxLength={30} required autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} /></label>
         <label>Email<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
         <label>Password<input type="password" minLength={8} required value={password} onChange={(event) => setPassword(event.target.value)} /></label>
         <button disabled={submitting} type="submit">{submitting ? "Creating account…" : "Create account"}</button>
