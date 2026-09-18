@@ -4,9 +4,9 @@ import { browserClient } from "../lib/supabase";
 import {
   birthdayBonus,
   defaultLockAt,
+  FIRST_SEASON_START,
   formatDate,
   pickingWeek,
-  seasonStart,
 } from "../lib/game";
 import Avatar from "./avatar";
 type Category = {
@@ -75,7 +75,7 @@ export default function Game() {
       db
         .from("season_scores")
         .select("username,avatar_url,score,user_id")
-        .eq("season_start", seasonStart(w))
+        .eq("season_start", FIRST_SEASON_START)
         .order("score", { ascending: false })
         .limit(100),
     ]);
