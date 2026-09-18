@@ -399,3 +399,50 @@ hr {
     transition: none;
   }
 }
+
+.score-topic {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+}
+.score-topic h2 {
+  margin: 0;
+  font-size: clamp(18px, 4vw, 24px);
+}
+.score-controls {
+  display: grid;
+  grid-template-columns: 54px 78px 54px;
+  gap: 8px;
+  align-items: center;
+}
+.score-step {
+  min-height: 54px;
+  padding: 8px;
+  font-size: 30px;
+  line-height: 1;
+}
+.score-total {
+  width: 78px;
+  min-height: 54px;
+  margin: 0;
+  padding: 8px;
+  font-size: 24px;
+  font-weight: 900;
+  text-align: center;
+}
+@media (max-width: 620px) {
+  .score-topic {
+    grid-template-columns: 1fr;
+  }
+  .score-controls {
+    grid-template-columns: 1fr 92px 1fr;
+  }
+  .score-step {
+    min-height: 60px;
+  }
+  .score-total {
+    width: 92px;
+    min-height: 60px;
+  }
+}

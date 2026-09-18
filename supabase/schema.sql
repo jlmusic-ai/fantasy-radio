@@ -130,4 +130,93 @@ end;
 $$;
 revoke all on function public.admin_delete_user(uuid) from public,anon;
 grant execute on function public.admin_delete_user(uuid) to authenticated;
+
+
+create or replace function public.adjust_weekly_occurrences(
+  p_week date,
+  p_category_id uuid,
+  p_delta integer default null,
+  p_target integer default null
+)
+returns integer
+language plpgsql
+security invoker
+set search_path=''
+as $
+declare
+  current_monday date;
+  current_total integer;
+  new_total integer;
+begin
+  if auth.uid() is null or not public.is_commissioner() then
+    raise exception 'Commissioner access required' using errcode='42501';
+  end if;
+  if (p_delta is null) = (p_target is null) then
+    raise exception 'Provide either a change or a total';
+  end if;
+  current_monday := (now() at time zone 'America/New_York')::date
+    - (extract(isodow from now() at time zone 'America/New_York')::integer - 1);
+  if p_week <> current_monday then
+    raise exception 'Only the current broadcast week can be scored';
+  end if;
+  if not exists (
+    select 1 from public.categories
+    where id=p_category_id and active
+  ) then
+    raise exception 'Unknown or inactive lineup topic';
+  end if;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(p_week::text || ':' || p_category_id::text, 0)
+  );
+
+  insert into public.weeks(id,lock_at,season_start)
+  values(
+    p_week,
+    (p_week::timestamp+time '06:00') at time zone 'America/New_York',
+    case
+      when p_week between date '2026-10-05' and date '2026-11-20'
+        then date '2026-10-05'
+      else p_week
+    end
+  )
+  on conflict(id) do nothing;
+
+  select coalesce(sum(quantity),0)::integer into current_total
+  from public.events
+  where week_id=p_week and category_id=p_category_id;
+
+  new_total := case
+    when p_target is not null then p_target
+    else greatest(0,current_total+p_delta)
+  end;
+  if new_total not between 0 and 5000 then
+    raise exception 'Occurrence total must be between 0 and 5000';
+  end if;
+
+  delete from public.events
+  where week_id=p_week and category_id=p_category_id;
+
+  if new_total>0 then
+    insert into public.events(
+      week_id,category_id,occurred_at,quantity,note,created_by
+    )
+    select
+      p_week,
+      p_category_id,
+      now(),
+      least(100,new_total-((part-1)*100)),
+      'Set from Score this week',
+      auth.uid()
+    from generate_series(1,ceil(new_total/100.0)::integer) as part;
+  end if;
+
+  return new_total;
+end;
+$;
+revoke all on function public.adjust_weekly_occurrences(date,uuid,integer,integer)
+from public,anon;
+grant execute on function public.adjust_weekly_occurrences(date,uuid,integer,integer)
+to authenticated;
+
 insert into categories(name,description,scoring_type,display_order) values ('Pittsburgh Scanner','A distinct qualifying scanner story','allocation',10),('A Florida story involving nudity','A distinct Florida story involving nudity','allocation',20),('Over 15 Mike McCarthy Meows in One Interview Clip','A qualifying interview clip containing more than 15 Mike McCarthy meows','allocation',30),('Something or someone sent to Tha’ Crossroads','A distinct instance of something or someone being sent to Tha’ Crossroads','allocation',40),('Listener Talkback','A distinct listener talkback played on air','allocation',50),('🎂 Bob’s Birthday Wishes 🎂','Guess how many times Bob will be wished a Happy Birthday this week.','closest_guess',60) on conflict(name) do nothing;

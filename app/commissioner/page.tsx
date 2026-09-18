@@ -8,13 +8,6 @@ type Category = {
   scoring_type: "allocation" | "closest_guess";
   display_order: number;
 };
-type Event = {
-  id: string;
-  category_id: string;
-  quantity: number;
-  note: string;
-  occurred_at: string;
-};
 const PITTSBURGH = "America/New_York";
 
 function formatPittsburghDateTime(iso: string) {
@@ -86,13 +79,7 @@ export default function Commissioner() {
   const db = browserClient();
   const [allowed, setAllowed] = useState(false),
     [categories, setCategories] = useState<Category[]>([]),
-    [events, setEvents] = useState<Event[]>([]),
     [week, setWeek] = useState(pickingWeek(new Date())),
-    [category, setCategory] = useState(""),
-    [quantity, setQuantity] = useState(1),
-    [note, setNote] = useState(""),
-    [occurred, setOccurred] = useState(""),
-    [msg, setMsg] = useState(""),
     [weekMsg, setWeekMsg] = useState(""),
     [savingWeek, setSavingWeek] = useState(false),
     [topicMsg, setTopicMsg] = useState(""),
@@ -111,22 +98,16 @@ export default function Commissioner() {
       .single();
     if (!p?.is_commissioner) return;
     setAllowed(true);
-    const [c, e, savedWeek] = await Promise.all([
+    const [c, savedWeek] = await Promise.all([
       db
         .from("categories")
         .select("id,name,scoring_type,display_order")
         .eq("active", true)
         .order("display_order")
         .order("name"),
-      db
-        .from("events")
-        .select("id,category_id,quantity,note,occurred_at")
-        .eq("week_id", week)
-        .order("occurred_at", { ascending: false }),
       db.from("weeks").select("lock_at").eq("id", week).maybeSingle(),
     ]);
     setCategories(c.data || []);
-    setEvents(e.data || []);
     setLock(
       savedWeek.data?.lock_at
         ? formatPittsburghDateTime(savedWeek.data.lock_at)
@@ -136,37 +117,6 @@ export default function Commissioner() {
   useEffect(() => {
     load();
   }, [week]);
-  async function add() {
-    const r = await fetch("/api/commissioner/events", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        week_id: week,
-        category_id: category,
-        quantity,
-        note,
-        occurred_at: occurred
-          ? new Date(occurred).toISOString()
-          : new Date().toISOString(),
-      }),
-    });
-    const d = await r.json();
-    setMsg(r.ok ? "Event recorded" : d.error);
-    if (r.ok) {
-      setNote("");
-      load();
-    }
-  }
-  async function remove(id: string) {
-    if (!confirm("Delete this event and recalculate all scores?")) return;
-    const r = await fetch("/api/commissioner/events", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
-    if (r.ok) load();
-    else setMsg("Could not delete event");
-  }
   async function createWeek() {
     if (!lock) {
       setWeekMsg("Choose a lineup lock date and time.");
@@ -369,67 +319,6 @@ export default function Commissioner() {
               </button>
               <button onClick={() => saveTopic(item)}>Save topic</button>
             </div>
-          </div>
-        ))}
-      </div>
-      <div className="panel">
-        <h2>Record an occurrence</h2>
-        <label>
-          Category
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-          >
-            <option value="">Select category</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Occurrences
-          <input
-            type="number"
-            min="1"
-            max="100"
-            value={quantity}
-            onChange={(e) => setQuantity(Number(e.target.value))}
-          />
-        </label>
-        <DatePicker
-          label="Broadcast time (optional; defaults to now)"
-          type="datetime-local"
-          value={occurred}
-          onChange={setOccurred}
-        />
-        <label>
-          Notes
-          <textarea
-            maxLength={1000}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        </label>
-        <button disabled={!category} onClick={add}>
-          Record event
-        </button>
-        <p>{msg}</p>
-      </div>
-      <div className="panel">
-        <h2>Recorded events</h2>
-        {events.map((e) => (
-          <div className="row" key={e.id}>
-            <p>
-              {categories.find((c) => c.id === e.category_id)?.name} ×{" "}
-              {e.quantity}
-              <br />
-              <small className="muted">
-                {new Date(e.occurred_at).toLocaleString()} · {e.note}
-              </small>
-            </p>
-            <button onClick={() => remove(e.id)}>Delete</button>
           </div>
         ))}
       </div>

@@ -36,6 +36,7 @@ export default async function Layout({
                 </summary>
                 <div className="panel" style={{ position: "absolute", zIndex: 10, right: 0, minWidth: 170, marginTop: 8, padding: 14, display: "grid", gap: 12 }}>
                   <a href="/commissioner">Dashboard</a>
+                  <a href="/commissioner/score">Score this week</a>
                   <a href="/commissioner/users">Users</a>
                 </div>
               </details>
