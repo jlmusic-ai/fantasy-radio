@@ -297,10 +297,6 @@ export default function Game() {
           {allocationCategories.map((c) => {
             const currentPoints = picks[c.id] || 0;
             const pointsRemaining = Math.max(0, 100 - total);
-            const categoryMaximum = Math.min(
-              25,
-              100 - (total - currentPoints),
-            );
             return (
               <div key={c.id} className="panel">
                 <div className="row">
@@ -315,14 +311,13 @@ export default function Game() {
                   aria-label={`Points for ${c.name}`}
                   type="range"
                   min="0"
-                  max={categoryMaximum}
+                  max="25"
                   step="1"
                   value={currentPoints}
                   disabled={locked || !user}
                   onChange={(e) => {
                     const requestedPoints = Number(e.target.value);
                     setPicks((currentPicks) => {
-                      const existingPoints = currentPicks[c.id] || 0;
                       const otherPoints = allocationCategories.reduce(
                         (sum, category) =>
                           category.id === c.id
