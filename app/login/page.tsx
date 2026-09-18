@@ -4,6 +4,7 @@ import Script from "next/script";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { browserClient } from "../../lib/supabase";
 
+// Supabase CAPTCHA protection requires a fresh Turnstile token for every login attempt.
 const TURNSTILE_SITE_KEY = "0x4AAAAAAE71CdgCBE-ygwBe";
 
 type TurnstileApi = {
