@@ -464,3 +464,34 @@ hr {
   background: #29240f;
   color: var(--gold);
 }
+
+/* Keep standings inside the panel, even with long unbroken usernames. */
+table:has(.player-cell) {
+  table-layout: fixed;
+}
+table:has(.player-cell) th:first-child {
+  width: 3.5rem;
+}
+table:has(.player-cell) th:last-child {
+  width: 4.5rem;
+}
+table:has(.player-cell) th:last-child,
+table:has(.player-cell) td:last-child {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.player-cell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 560px) {
+  table:has(.player-cell) td,
+  table:has(.player-cell) th {
+    padding-inline: 4px;
+  }
+  .player-cell {
+    gap: 7px;
+  }
+}
