@@ -482,3 +482,24 @@ select cron.schedule(
   '* * * * *',
   'select private.finalize_closed_weeks();'
 );
+
+
+-- Deleting a lineup topic retires it instead of removing historical data.
+create or replace function private.archive_category_instead_of_delete()
+returns trigger
+language plpgsql
+security definer
+set search_path=''
+as $function$
+begin
+  update public.categories set active=false where id=old.id;
+  return null;
+end
+$function$;
+revoke all on function private.archive_category_instead_of_delete()
+  from public,anon,authenticated;
+
+create trigger archive_category_instead_of_delete
+before delete on public.categories
+for each row
+execute function private.archive_category_instead_of_delete();
