@@ -34,10 +34,14 @@ type PickWindow = {
   closes_at: string;
   is_locked: boolean;
 };
-type SeasonWeekScore = {
+type SeasonStatsRow = {
   user_id: string;
-  week_id: string;
-  score: number;
+  weeks_played: number;
+  longest_streak: number;
+  highest_weekly_score: number;
+  average_weekly_score: number;
+  best_week: string | null;
+  hundred_point_weeks: number;
 };
 type SeasonStats = {
   weeksPlayed: number;
@@ -47,19 +51,20 @@ type SeasonStats = {
   bestWeek: string | null;
   hundredPointWeeks: number;
 };
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-function longestWeeklyStreak(weeks: string[]) {
-  const uniqueWeeks = [...new Set(weeks)].sort();
-  let longest = 0;
-  let current = 0;
-  let previous: number | null = null;
-  uniqueWeeks.forEach((week) => {
-    const time = new Date(`${week}T12:00:00Z`).getTime();
-    current = previous !== null && time - previous === WEEK_MS ? current + 1 : 1;
-    longest = Math.max(longest, current);
-    previous = time;
-  });
-  return longest;
+function SeasonTrophy({ rank }: { rank: number }) {
+  if (rank > 3) return null;
+  const names = ["Gold", "Silver", "Bronze"];
+  return (
+    <span
+      className={`season-trophy season-trophy-${rank}`}
+      aria-label={`${names[rank - 1]} trophy`}
+      title={`${names[rank - 1]} trophy`}
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M7 3h10v3h3v2a5 5 0 0 1-5 4.9A5 5 0 0 1 13 15.58V19h3v2H8v-2h3v-3.42A5 5 0 0 1 9 12.9 5 5 0 0 1 4 8V6h3V3Zm10 5v2.73A3 3 0 0 0 18 8h-1ZM6 8a3 3 0 0 0 1 2.73V8H6Z" />
+      </svg>
+    </span>
+  );
 }
 export default function Game() {
   const db = browserClient();
@@ -81,6 +86,9 @@ export default function Game() {
     [tab, setTab] = useState("picks"),
     [loading, setLoading] = useState(true);
   const weekRef = useRef(week);
+  const avatarCacheRef = useRef(
+    new Map<string, { url: string; expiresAt: number }>(),
+  );
 
   async function load({
     showLoading = true,
@@ -107,7 +115,7 @@ export default function Game() {
       weekRef.current = w;
       setWeek(w);
     }
-    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonWeekScores] =
+    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonStatsRows] =
       await Promise.all([
       db
         .from("categories")
@@ -122,24 +130,27 @@ export default function Game() {
         .select("username,avatar_url,score,user_id")
         .eq("week_id", w)
         .order("score", { ascending: false })
-        .limit(100),
+        .limit(1000),
       db
         .from("season_scores")
         .select("username,avatar_url,score,user_id")
         .eq("season_start", FIRST_SEASON_START)
         .order("score", { ascending: false })
-        .limit(100),
+        .limit(1000),
       db
         .from("profiles")
         .select("id,username,avatar_url")
-        .order("username"),
-      db.from("picks").select("user_id,points").eq("week_id", w),
+        .order("username")
+        .limit(1000),
       db
-        .from("weekly_scores")
-        .select("user_id,week_id,score")
-        .gte("week_id", FIRST_SEASON_START)
-        .lte("week_id", FIRST_SEASON_END)
-        .order("week_id"),
+        .from("weekly_lineup_status")
+        .select("user_id,allocated_points")
+        .eq("week_id", w)
+        .limit(1000),
+      db
+        .from("season_player_stats")
+        .select("user_id,weeks_played,longest_streak,highest_weekly_score,average_weekly_score,best_week,hundred_point_weeks")
+        .limit(1000),
     ]);
     setCategories((cats.data || []) as Category[]);
     const lockAt =
@@ -154,18 +165,11 @@ export default function Game() {
         (counts[e.category_id] = (counts[e.category_id] || 0) + e.quantity),
     );
     setEvents(counts);
-    const allocatedPoints = new Map<string, number>();
-    (lineupStatus.data || []).forEach((pick) => {
-      allocatedPoints.set(
-        pick.user_id,
-        (allocatedPoints.get(pick.user_id) || 0) + pick.points,
-      );
-    });
     setCompletedPickUsers(
       new Set(
-        [...allocatedPoints.entries()]
-          .filter(([, points]) => points === 100)
-          .map(([userId]) => userId),
+        (lineupStatus.data || [])
+          .filter((lineup) => lineup.allocated_points === 100)
+          .map((lineup) => lineup.user_id),
       ),
     );
     const allPlayers = (profiles.data || []) as PlayerProfile[];
@@ -188,30 +192,22 @@ export default function Game() {
     };
     const rawLeaders = includeZeroScores((lb.data || []) as Score[]);
     const rawSeasonLeaders = includeZeroScores((sl.data || []) as Score[]);
-    const scoresByPlayer = new Map<string, SeasonWeekScore[]>();
-    ((seasonWeekScores.data || []) as SeasonWeekScore[]).forEach((row) => {
-      const rows = scoresByPlayer.get(row.user_id) || [];
-      rows.push(row);
-      scoresByPlayer.set(row.user_id, rows);
-    });
+    const statsByPlayer = new Map(
+      ((seasonStatsRows.data || []) as SeasonStatsRow[]).map((row) => [
+        row.user_id,
+        row,
+      ]),
+    );
     const nextSeasonStats: Record<string, SeasonStats> = {};
     allPlayers.forEach((player) => {
-      const rows = (scoresByPlayer.get(player.id) || []).sort((a, b) =>
-        a.week_id.localeCompare(b.week_id),
-      );
-      const totalScore = rows.reduce((sum, row) => sum + row.score, 0);
-      const best = rows.reduce<SeasonWeekScore | null>(
-        (currentBest, row) =>
-          !currentBest || row.score > currentBest.score ? row : currentBest,
-        null,
-      );
+      const row = statsByPlayer.get(player.id);
       nextSeasonStats[player.id] = {
-        weeksPlayed: rows.length,
-        longestStreak: longestWeeklyStreak(rows.map((row) => row.week_id)),
-        highestWeeklyScore: best?.score ?? 0,
-        averageWeeklyScore: rows.length ? Math.round(totalScore / rows.length) : 0,
-        bestWeek: best?.week_id ?? null,
-        hundredPointWeeks: rows.filter((row) => row.score >= 100).length,
+        weeksPlayed: row?.weeks_played ?? 0,
+        longestStreak: row?.longest_streak ?? 0,
+        highestWeeklyScore: row?.highest_weekly_score ?? 0,
+        averageWeeklyScore: row?.average_weekly_score ?? 0,
+        bestWeek: row?.best_week ?? null,
+        hundredPointWeeks: row?.hundred_point_weeks ?? 0,
       };
     });
     setSeasonStats(nextSeasonStats);
@@ -222,20 +218,34 @@ export default function Game() {
           .filter((path): path is string => Boolean(path)),
       ),
     ];
-    const signedAvatars = new Map<string, string>();
-    if (avatarPaths.length) {
-      const { data } = await db.storage
-        .from("avatars")
-        .createSignedUrls(avatarPaths, 3600);
+    const now = Date.now();
+    const pathsToSign = avatarPaths.filter((path) => {
+      const cached = avatarCacheRef.current.get(path);
+      return !cached || cached.expiresAt <= now + 5 * 60_000;
+    });
+    const batches = Array.from(
+      { length: Math.ceil(pathsToSign.length / 100) },
+      (_, index) => pathsToSign.slice(index * 100, index * 100 + 100),
+    );
+    const signedBatches = await Promise.all(
+      batches.map((batch) =>
+        db.storage.from("avatars").createSignedUrls(batch, 3600),
+      ),
+    );
+    signedBatches.forEach(({ data }) => {
       (data || []).forEach((item) => {
-        if (item.path && item.signedUrl)
-          signedAvatars.set(item.path, item.signedUrl);
+        if (item.path && item.signedUrl) {
+          avatarCacheRef.current.set(item.path, {
+            url: item.signedUrl,
+            expiresAt: now + 3600_000,
+          });
+        }
       });
-    }
+    });
     const withSignedAvatar = (player: Score) => ({
       ...player,
       avatar_url: player.avatar_url
-        ? signedAvatars.get(player.avatar_url) || null
+        ? avatarCacheRef.current.get(player.avatar_url)?.url || null
         : null,
     });
     setLeaders(rawLeaders.map(withSignedAvatar));
@@ -274,10 +284,17 @@ export default function Game() {
   }
   useEffect(() => {
     load();
-    const rolloverCheck = window.setInterval(
-      () => load({ showLoading: false, hydratePicks: false }),
-      60_000,
-    );
+    const refreshPickWindow = async () => {
+      const { data } = await db.rpc("active_pick_window").single();
+      const nextWindow = data as PickWindow | null;
+      if (!nextWindow) return;
+      if (nextWindow.active_week !== weekRef.current) {
+        await load({ showLoading: false, hydratePicks: true });
+      } else {
+        setLocked(nextWindow.is_locked);
+      }
+    };
+    const rolloverCheck = window.setInterval(refreshPickWindow, 60_000);
     const refreshVisibleData = () =>
       load({ showLoading: false, hydratePicks: false });
     const refreshWhenVisible = () => {
@@ -528,7 +545,12 @@ export default function Game() {
       ) : tab === "weekly" || tab === "season" ? (
         <div className="panel">
           <h2>{tab === "weekly" ? "Weekly" : "Season"} leaderboard</h2>
-          <table>
+          <div
+            className="leaderboard-scroll"
+            tabIndex={0}
+            aria-label={`${tab === "weekly" ? "Weekly" : "Season"} leaderboard, scroll for more players`}
+          >
+            <table>
             <thead>
               <tr>
                 <th>Rank</th>
@@ -560,6 +582,7 @@ export default function Game() {
                         ) : (
                           <span>{p.username}</span>
                         )}
+                        {tab === "season" && <SeasonTrophy rank={i + 1} />}
                         {tab === "weekly" && (
                           <span
                             className={`pick-status-badge ${
@@ -590,7 +613,8 @@ export default function Game() {
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
           {tab === "season" &&
             selectedSeasonPlayer &&
             selectedSeasonPlayerStats && (
