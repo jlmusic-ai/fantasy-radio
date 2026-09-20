@@ -137,6 +137,7 @@ export default function Login() {
         <button disabled={submitting || !captchaToken} type="submit">{submitting ? "Logging in…" : "Log in"}</button>
       </form>
       <p className="error" aria-live="polite">{message}</p>
+      <p><a href="/forgot-password">Forgot your password?</a></p>
       <a href="/signup">Create an account</a>
     </div>
   );
