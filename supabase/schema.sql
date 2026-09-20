@@ -7,7 +7,11 @@ create table public.picks (user_id uuid not null references public.profiles(id) 
 create table public.birthday_predictions (user_id uuid not null references public.profiles(id) on delete cascade, week_id date not null references public.weeks(id) on delete cascade, guess integer not null check(guess between 0 and 500), primary key(user_id,week_id));
 create table public.events (id uuid primary key default gen_random_uuid(), week_id date not null references public.weeks(id), category_id uuid not null references public.categories(id), occurred_at timestamptz not null, quantity integer not null check(quantity between 1 and 100), note text not null default '', created_by uuid not null references public.profiles(id), created_at timestamptz not null default now());
 create index events_week_category on public.events(week_id,category_id);
+create index events_category_id on public.events(category_id);
+create index events_created_by on public.events(created_by);
 create index picks_week_user on public.picks(week_id,user_id);
+create index picks_category_id on public.picks(category_id);
+create index birthday_predictions_week_user on public.birthday_predictions(week_id,user_id);
 create unique index profiles_username_lower_unique on public.profiles(lower(username));
 create or replace function public.new_profile() returns trigger language plpgsql security definer set search_path='' as $$
 declare chosen_username text;
@@ -262,3 +266,60 @@ grant execute on function public.adjust_weekly_occurrences(date,uuid,integer,int
 to authenticated;
 
 insert into categories(name,description,scoring_type,display_order) values ('Pittsburgh Scanner','A distinct qualifying scanner story','allocation',10),('A Florida story involving nudity','A distinct Florida story involving nudity','allocation',20),('Over 15 Mike McCarthy Meows in One Interview Clip','A qualifying interview clip containing more than 15 Mike McCarthy meows','allocation',30),('Something or someone sent to Tha’ Crossroads','A distinct instance of something or someone being sent to Tha’ Crossroads','allocation',40),('Listener Talkback','A distinct listener talkback played on air','allocation',50),('🎂 Bob’s Birthday Wishes 🎂','Guess how many times Bob will be wished a Happy Birthday this week.','closest_guess',60) on conflict(name) do nothing;
+
+
+-- Compact summaries keep leaderboard payloads below the Data API row cap
+-- when Mooberball grows to hundreds of players.
+create or replace view public.weekly_lineup_status
+with (security_invoker=true) as
+select week_id,user_id,sum(points)::integer allocated_points
+from public.picks
+group by week_id,user_id;
+
+create or replace view public.season_player_stats
+with (security_invoker=true) as
+with season_weeks as (
+  select week_id,user_id,score
+  from public.weekly_scores
+  where week_id between date '2026-10-05' and date '2026-11-20'
+), numbered as (
+  select
+    week_id,
+    user_id,
+    score,
+    week_id-((row_number() over(partition by user_id order by week_id))::integer*7) streak_group
+  from season_weeks
+), streaks as (
+  select user_id,count(*)::integer streak_length
+  from numbered
+  group by user_id,streak_group
+), longest_streaks as (
+  select user_id,max(streak_length)::integer longest_streak
+  from streaks
+  group by user_id
+), summaries as (
+  select
+    user_id,
+    count(*)::integer weeks_played,
+    max(score)::bigint highest_weekly_score,
+    round(avg(score))::bigint average_weekly_score,
+    (array_agg(week_id order by score desc,week_id asc))[1] best_week,
+    count(*) filter(where score>=100)::integer hundred_point_weeks
+  from season_weeks
+  group by user_id
+)
+select
+  summaries.user_id,
+  summaries.weeks_played,
+  longest_streaks.longest_streak,
+  summaries.highest_weekly_score,
+  summaries.average_weekly_score,
+  summaries.best_week,
+  summaries.hundred_point_weeks
+from summaries
+join longest_streaks using(user_id);
+
+revoke all on public.weekly_lineup_status from anon;
+revoke all on public.season_player_stats from anon;
+grant select on public.weekly_lineup_status to authenticated;
+grant select on public.season_player_stats to authenticated;
