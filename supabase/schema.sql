@@ -89,6 +89,7 @@ revoke update on public.profiles from authenticated;
 grant update(username,avatar_url) on public.profiles to authenticated;
 -- Commissioner profiles are granted manually in SQL; no client can grant itself commissioner status.
 create policy categories_read on categories for select to authenticated using(true);
+create policy categories_public_active_read on categories for select to anon using(active = true);
 create policy categories_admin on categories for all to authenticated using(is_commissioner()) with check(is_commissioner());
 create policy weeks_read on weeks for select to authenticated using(true);
 create policy weeks_admin on weeks for all to authenticated using(is_commissioner()) with check(is_commissioner());
