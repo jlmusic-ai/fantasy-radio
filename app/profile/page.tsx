@@ -55,11 +55,18 @@ export default function ProfilePage() {
       setProfileMessage("Username must contain at least three characters.");
       return;
     }
-    const { error } = await db
+    const { data, error } = await db
       .from("profiles")
       .update({ username: cleanUsername })
-      .eq("id", userId);
-    setProfileMessage(error ? error.message : "Profile saved.");
+      .eq("id", userId)
+      .select("username")
+      .single();
+    if (error) {
+      setProfileMessage(error.message);
+      return;
+    }
+    setUsername(data.username);
+    setProfileMessage("Profile saved. Your leaderboard name is now updated.");
   }
 
   async function uploadPhoto(file?: File) {

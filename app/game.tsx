@@ -215,16 +215,25 @@ export default function Game() {
       () => load({ showLoading: false, hydratePicks: false }),
       60_000,
     );
+    const refreshVisibleData = () =>
+      load({ showLoading: false, hydratePicks: false });
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refreshVisibleData();
+    };
+    window.addEventListener("focus", refreshVisibleData);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
     const channel = db
       .channel("scores")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "events" },
-        () => load({ showLoading: false, hydratePicks: false }),
+        refreshVisibleData,
       )
       .subscribe();
     return () => {
       window.clearInterval(rolloverCheck);
+      window.removeEventListener("focus", refreshVisibleData);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
       db.removeChannel(channel);
     };
   }, []);
@@ -301,13 +310,19 @@ export default function Game() {
         </button>
         <button
           className={tab === "weekly" ? "active" : ""}
-          onClick={() => setTab("weekly")}
+          onClick={() => {
+            setTab("weekly");
+            void load({ showLoading: false, hydratePicks: false });
+          }}
         >
           Weekly standings
         </button>
         <button
           className={tab === "season" ? "active" : ""}
-          onClick={() => setTab("season")}
+          onClick={() => {
+            setTab("season");
+            void load({ showLoading: false, hydratePicks: false });
+          }}
         >
           Season standings
         </button>
