@@ -7,15 +7,32 @@ const fallbackTopics = [
   "🎂 Bob's Birthday Wishes 🎂",
 ];
 
+function pickRandomTopics(topics: string[], count: number) {
+  const shuffled = [...topics];
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[randomIndex]] = [
+      shuffled[randomIndex],
+      shuffled[index],
+    ];
+  }
+
+  return shuffled.slice(0, count);
+}
+
 export default async function RulesContent() {
   const db = await serverClient();
   const { data } = await db
     .from("categories")
     .select("name")
     .eq("active", true)
-    .order("display_order")
-    .limit(7);
-  const topics = data?.length ? data.map((topic) => topic.name) : fallbackTopics;
+    .order("display_order");
+  const availableTopics =
+    data && data.length >= 4
+      ? data.map((topic) => topic.name)
+      : fallbackTopics;
+  const topics = pickRandomTopics(availableTopics, 4);
 
   return (
     <>
