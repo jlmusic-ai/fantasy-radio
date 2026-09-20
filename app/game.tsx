@@ -35,6 +35,9 @@ export default function Game() {
     [picks, setPicks] = useState<Record<string, number>>({}),
     [birthdayGuess, setBirthdayGuess] = useState<number | null>(null),
     [events, setEvents] = useState<Record<string, number>>({}),
+    [completedPickUsers, setCompletedPickUsers] = useState<Set<string>>(
+      new Set(),
+    ),
     [leaders, setLeaders] = useState<Score[]>([]),
     [seasonLeaders, setSeasonLeaders] = useState<Score[]>([]),
     [week, setWeek] = useState(pickingWeek(new Date())),
@@ -62,7 +65,8 @@ export default function Game() {
       weekRef.current = w;
       setWeek(w);
     }
-    const [cats, ws, ev, lb, sl, profiles] = await Promise.all([
+    const [cats, ws, ev, lb, sl, profiles, lineupStatus] =
+      await Promise.all([
       db
         .from("categories")
         .select("id,name,description,scoring_type,display_order")
@@ -87,6 +91,7 @@ export default function Game() {
         .from("profiles")
         .select("id,username,avatar_url")
         .order("username"),
+      db.from("picks").select("user_id,points").eq("week_id", w),
     ]);
     setCategories((cats.data || []) as Category[]);
     const lockAt = ws.data?.lock_at || defaultLockAt(w);
@@ -97,6 +102,20 @@ export default function Game() {
         (counts[e.category_id] = (counts[e.category_id] || 0) + e.quantity),
     );
     setEvents(counts);
+    const allocatedPoints = new Map<string, number>();
+    (lineupStatus.data || []).forEach((pick) => {
+      allocatedPoints.set(
+        pick.user_id,
+        (allocatedPoints.get(pick.user_id) || 0) + pick.points,
+      );
+    });
+    setCompletedPickUsers(
+      new Set(
+        [...allocatedPoints.entries()]
+          .filter(([, points]) => points === 100)
+          .map(([userId]) => userId),
+      ),
+    );
     const allPlayers = (profiles.data || []) as PlayerProfile[];
     const includeZeroScores = (scoredPlayers: Score[]) => {
       if (!allPlayers.length) return scoredPlayers;
@@ -413,7 +432,32 @@ export default function Game() {
                   <td>
                     <span className="player-cell">
                       <Avatar name={p.username} url={p.avatar_url} size={34} />
-                      {p.username}
+                      <span className="player-name-line">
+                        <span>{p.username}</span>
+                        {tab === "weekly" && (
+                          <span
+                            className={`pick-status-badge ${
+                              completedPickUsers.has(p.user_id)
+                                ? "pick-status-complete"
+                                : "pick-status-incomplete"
+                            }`}
+                            data-tooltip={
+                              completedPickUsers.has(p.user_id)
+                                ? "Picks are in!"
+                                : "Points still remaining."
+                            }
+                            aria-label={
+                              completedPickUsers.has(p.user_id)
+                                ? "Picks are in!"
+                                : "Points still remaining."
+                            }
+                            role="img"
+                            tabIndex={0}
+                          >
+                            {completedPickUsers.has(p.user_id) ? "✓" : "?"}
+                          </span>
+                        )}
+                      </span>
                     </span>
                   </td>
                   <td>{p.score}</td>
