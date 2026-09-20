@@ -91,6 +91,48 @@ create policy events_read on events for select to authenticated using(true);
 create policy events_admin on events for all to authenticated using(is_commissioner()) with check(is_commissioner());
 revoke all on function public.submit_lineup(date,jsonb,integer) from public,anon;
 grant execute on function public.submit_lineup(date,jsonb,integer) to authenticated;
+
+create or replace function public.active_pick_window()
+returns table(active_week date, closes_at timestamptz, is_locked boolean)
+language sql
+stable
+security invoker
+set search_path=''
+as $function$
+  with local_clock as (
+    select now() at time zone 'America/New_York' as local_now
+  ),
+  active as (
+    select
+      local_now::date
+        - (extract(isodow from local_now)::integer - 1)
+        + case
+            when extract(isodow from local_now) > 5
+              or (
+                extract(isodow from local_now) = 5
+                and local_now::time >= time '17:00'
+              )
+            then 7
+            else 0
+          end as week_id
+    from local_clock
+  ),
+  pick_window as (
+    select
+      a.week_id,
+      coalesce(
+        w.lock_at,
+        (a.week_id::timestamp + time '06:00')
+          at time zone 'America/New_York'
+      ) as lock_at
+    from active a
+    left join public.weeks w on w.id = a.week_id
+  )
+  select week_id, lock_at, now() >= lock_at
+  from pick_window;
+$function$;
+revoke all on function public.active_pick_window() from public,anon;
+grant execute on function public.active_pick_window() to authenticated;
 insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types) values('avatars','avatars',false,2097152,array['image/jpeg','image/png','image/webp']) on conflict(id) do update set public=excluded.public,file_size_limit=excluded.file_size_limit,allowed_mime_types=excluded.allowed_mime_types;
 create policy avatars_select_authenticated on storage.objects for select to authenticated using(bucket_id='avatars');
 create policy avatars_insert_own on storage.objects for insert to authenticated with check(bucket_id='avatars' and (storage.foldername(name))[1]=(select auth.uid())::text);

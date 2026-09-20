@@ -55,11 +55,17 @@ export default function Game() {
     hydratePicks?: boolean;
   } = {}) {
     if (showLoading) setLoading(true);
-    const {
-      data: { user: u },
-    } = await db.auth.getUser();
+    const [
+      {
+        data: { user: u },
+      },
+      pickWindow,
+    ] = await Promise.all([
+      db.auth.getUser(),
+      db.rpc("active_pick_window").single(),
+    ]);
     setUser(u?.id || null);
-    const w = pickingWeek(new Date());
+    const w = pickWindow.data?.active_week || pickingWeek(new Date());
     const weekChanged = weekRef.current !== w;
     if (weekChanged) {
       weekRef.current = w;
@@ -94,8 +100,12 @@ export default function Game() {
       db.from("picks").select("user_id,points").eq("week_id", w),
     ]);
     setCategories((cats.data || []) as Category[]);
-    const lockAt = ws.data?.lock_at || defaultLockAt(w);
-    setLocked(Date.now() >= new Date(lockAt).getTime());
+    const lockAt =
+      pickWindow.data?.closes_at || ws.data?.lock_at || defaultLockAt(w);
+    setLocked(
+      pickWindow.data?.is_locked ??
+        Date.now() >= new Date(lockAt).getTime(),
+    );
     const counts: Record<string, number> = {};
     (ev.data || []).forEach(
       (e) =>
@@ -175,12 +185,18 @@ export default function Game() {
           .eq("user_id", u.id)
           .maybeSingle(),
       ]);
-      const values: Record<string, number> = {};
-      (savedPicks.data || []).forEach(
-        (p) => (values[p.category_id] = p.points),
-      );
-      setPicks(values);
-      setBirthdayGuess(savedGuess.data?.guess ?? null);
+      if (savedPicks.error || savedGuess.error) {
+        setMessage(
+          "Your saved lineup could not be refreshed. The displayed points have been retained.",
+        );
+      } else {
+        const values: Record<string, number> = {};
+        (savedPicks.data || []).forEach(
+          (p) => (values[p.category_id] = p.points),
+        );
+        setPicks(values);
+        setBirthdayGuess(savedGuess.data?.guess ?? null);
+      }
     } else if (!u && weekChanged) {
       setPicks({});
       setBirthdayGuess(null);
