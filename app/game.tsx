@@ -28,6 +28,11 @@ type Score = {
   score: number;
   user_id: string;
 };
+type PickWindow = {
+  active_week: string;
+  closes_at: string;
+  is_locked: boolean;
+};
 export default function Game() {
   const db = browserClient();
   const [user, setUser] = useState<string | null>(null),
@@ -65,7 +70,8 @@ export default function Game() {
       db.rpc("active_pick_window").single(),
     ]);
     setUser(u?.id || null);
-    const w = pickWindow.data?.active_week || pickingWeek(new Date());
+    const pickWindowData = pickWindow.data as PickWindow | null;
+    const w = pickWindowData?.active_week || pickingWeek(new Date());
     const weekChanged = weekRef.current !== w;
     if (weekChanged) {
       weekRef.current = w;
@@ -101,9 +107,9 @@ export default function Game() {
     ]);
     setCategories((cats.data || []) as Category[]);
     const lockAt =
-      pickWindow.data?.closes_at || ws.data?.lock_at || defaultLockAt(w);
+      pickWindowData?.closes_at || ws.data?.lock_at || defaultLockAt(w);
     setLocked(
-      pickWindow.data?.is_locked ??
+      pickWindowData?.is_locked ??
         Date.now() >= new Date(lockAt).getTime(),
     );
     const counts: Record<string, number> = {};
