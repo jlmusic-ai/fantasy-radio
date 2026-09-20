@@ -1,5 +1,7 @@
 -- Run in Supabase SQL Editor. Categories are illustrative; edit before launch.
 create extension if not exists pgcrypto;
+create schema if not exists private;
+revoke all on schema private from public,anon,authenticated;
 create table public.profiles (id uuid primary key references auth.users(id) on delete cascade, username text not null unique check(length(username) between 3 and 30), avatar_url text, is_commissioner boolean not null default false, created_at timestamptz not null default now());
 create table public.categories (id uuid primary key default gen_random_uuid(), name text not null unique, description text not null default '', active boolean not null default true, scoring_type text not null default 'allocation' check(scoring_type in ('allocation','closest_guess')), display_order integer not null default 0);
 create table public.weeks (id date primary key, lock_at timestamptz not null, season_start date not null);
@@ -48,6 +50,7 @@ declare
   total integer;
 begin
   if auth.uid() is null then raise exception 'Login required'; end if;
+  perform private.finalize_closed_weeks();
   local_now := now() at time zone 'America/New_York';
   current_monday := local_now::date-(extract(isodow from local_now)::integer-1);
   active_week := current_monday+case when extract(isodow from local_now)>5 or (extract(isodow from local_now)=5 and local_now::time>=time '17:00') then 7 else 0 end;
@@ -323,3 +326,159 @@ revoke all on public.weekly_lineup_status from anon;
 revoke all on public.season_player_stats from anon;
 grant select on public.weekly_lineup_status to authenticated;
 grant select on public.season_player_stats to authenticated;
+
+
+-- Freeze completed weeks so future topic edits cannot recalculate old scores.
+create extension if not exists pg_cron;
+create schema if not exists private;
+revoke all on schema private from public,anon,authenticated;
+
+create table public.finalized_weeks (
+  week_id date primary key references public.weeks(id) on delete cascade,
+  finalized_at timestamptz not null default now()
+);
+
+create table public.weekly_score_snapshots (
+  week_id date not null references public.weeks(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  score bigint not null,
+  finalized_at timestamptz not null default now(),
+  primary key(week_id,user_id)
+);
+create index weekly_score_snapshots_user_week
+  on public.weekly_score_snapshots(user_id,week_id);
+
+alter table public.finalized_weeks enable row level security;
+alter table public.weekly_score_snapshots enable row level security;
+create policy finalized_weeks_read on public.finalized_weeks
+  for select to authenticated using(true);
+create policy weekly_score_snapshots_read on public.weekly_score_snapshots
+  for select to authenticated using(true);
+revoke insert,update,delete,truncate
+  on public.finalized_weeks,public.weekly_score_snapshots
+  from anon,authenticated;
+
+create or replace view public.calculated_weekly_scores
+with (security_invoker=true) as
+with base as (
+  select
+    p.week_id,p.user_id,pr.username,pr.avatar_url,
+    coalesce(sum(p.points*coalesce(e.quantity,0)),0)::bigint base_score
+  from public.picks p
+  join public.profiles pr on pr.id=p.user_id
+  join public.categories pc
+    on pc.id=p.category_id and pc.scoring_type='allocation'
+  left join (
+    select week_id,category_id,sum(quantity) quantity
+    from public.events
+    group by week_id,category_id
+  ) e on e.week_id=p.week_id and e.category_id=p.category_id
+  group by p.week_id,p.user_id,pr.username,pr.avatar_url
+), birthday_actual as (
+  select e.week_id,coalesce(sum(e.quantity),0)::integer actual
+  from public.events e
+  join public.categories c on c.id=e.category_id
+  where c.scoring_type='closest_guess'
+  group by e.week_id
+)
+select
+  b.week_id,b.user_id,b.username,
+  (
+    b.base_score+
+    case
+      when bp.guess is null or ba.actual is null then 0
+      else greatest(0,50-abs(bp.guess-ba.actual)*5)
+    end
+  )::bigint score,
+  b.avatar_url
+from base b
+left join public.birthday_predictions bp
+  on bp.week_id=b.week_id and bp.user_id=b.user_id
+left join birthday_actual ba on ba.week_id=b.week_id;
+
+create or replace view public.weekly_scores
+with (security_invoker=true) as
+select c.week_id,c.user_id,c.username,c.score,c.avatar_url
+from public.calculated_weekly_scores c
+where not exists (
+  select 1 from public.finalized_weeks f where f.week_id=c.week_id
+)
+union all
+select s.week_id,s.user_id,p.username,s.score,p.avatar_url
+from public.weekly_score_snapshots s
+join public.profiles p on p.id=s.user_id
+join public.finalized_weeks f on f.week_id=s.week_id;
+
+grant select on public.calculated_weekly_scores to authenticated;
+grant select on public.weekly_scores to authenticated;
+
+create or replace function private.finalize_closed_weeks()
+returns void
+language plpgsql
+security definer
+set search_path=''
+as $function$
+declare
+  local_now timestamp;
+  current_monday date;
+  active_week date;
+begin
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtext('mooberball_finalize_closed_weeks')
+  );
+  local_now:=now() at time zone 'America/New_York';
+  current_monday:=
+    local_now::date-(extract(isodow from local_now)::integer-1);
+  active_week:=
+    current_monday+
+    case
+      when extract(isodow from local_now)>5
+        or (
+          extract(isodow from local_now)=5
+          and local_now::time>=time '17:00'
+        )
+      then 7 else 0
+    end;
+
+  insert into public.weekly_score_snapshots(week_id,user_id,score)
+  select c.week_id,c.user_id,c.score
+  from public.calculated_weekly_scores c
+  join public.weeks w on w.id=c.week_id
+  where c.week_id<active_week
+    and not exists (
+      select 1 from public.finalized_weeks f where f.week_id=c.week_id
+    )
+  on conflict(week_id,user_id) do nothing;
+
+  insert into public.finalized_weeks(week_id)
+  select w.id from public.weeks w where w.id<active_week
+  on conflict(week_id) do nothing;
+end
+$function$;
+revoke all on function private.finalize_closed_weeks()
+  from public,anon,authenticated;
+
+create or replace function private.finalize_before_category_change()
+returns trigger
+language plpgsql
+security definer
+set search_path=''
+as $function$
+begin
+  perform private.finalize_closed_weeks();
+  return null;
+end
+$function$;
+revoke all on function private.finalize_before_category_change()
+  from public,anon,authenticated;
+
+create trigger finalize_weeks_before_category_change
+before update or delete on public.categories
+for each statement
+execute function private.finalize_before_category_change();
+
+select cron.schedule(
+  'mooberball-finalize-closed-weeks',
+  '* * * * *',
+  'select private.finalize_closed_weeks();'
+);
