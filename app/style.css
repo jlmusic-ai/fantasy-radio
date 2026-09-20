@@ -553,3 +553,78 @@ table:has(.player-cell) td:last-child {
   opacity: 1;
   transform: translate(-50%, 0);
 }
+
+
+.leaderboard-user-button {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--gold-dark);
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+.leaderboard-user-button:hover,
+.leaderboard-user-button:focus-visible {
+  color: var(--gold);
+}
+.season-stats-card {
+  margin-top: 20px;
+  padding: 18px;
+  border: 1px solid var(--gold-dark);
+  border-radius: 14px;
+  background: #080808;
+}
+.season-stats-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.season-stats-heading h3 {
+  margin: 3px 0 0;
+  font-size: 24px;
+  overflow-wrap: anywhere;
+}
+.season-stats-close {
+  padding: 3px 9px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--gold);
+  font-size: 25px;
+  line-height: 1;
+}
+.season-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+.season-stat {
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #111;
+}
+.season-stat span {
+  display: block;
+  color: #aaa;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.season-stat strong {
+  display: block;
+  margin-top: 5px;
+  color: #fff;
+  font-size: 19px;
+}
+.season-stats-note {
+  margin: 14px 0 0;
+  font-size: 13px;
+}
