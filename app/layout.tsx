@@ -21,8 +21,8 @@ export default async function Layout({
             <Image
               src="/mooberball-logo.png"
               alt="Mooberball"
-              width={180}
-              height={162}
+              width={220}
+              height={110}
               priority
             />
           </a>
