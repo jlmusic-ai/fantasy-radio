@@ -4,6 +4,7 @@ import { browserClient } from "../lib/supabase";
 import {
   birthdayBonus,
   defaultLockAt,
+  FIRST_SEASON_END,
   FIRST_SEASON_START,
   formatDate,
   pickingWeek,
@@ -33,6 +34,33 @@ type PickWindow = {
   closes_at: string;
   is_locked: boolean;
 };
+type SeasonWeekScore = {
+  user_id: string;
+  week_id: string;
+  score: number;
+};
+type SeasonStats = {
+  weeksPlayed: number;
+  longestStreak: number;
+  highestWeeklyScore: number;
+  averageWeeklyScore: number;
+  bestWeek: string | null;
+  hundredPointWeeks: number;
+};
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+function longestWeeklyStreak(weeks: string[]) {
+  const uniqueWeeks = [...new Set(weeks)].sort();
+  let longest = 0;
+  let current = 0;
+  let previous: number | null = null;
+  uniqueWeeks.forEach((week) => {
+    const time = new Date(`${week}T12:00:00Z`).getTime();
+    current = previous !== null && time - previous === WEEK_MS ? current + 1 : 1;
+    longest = Math.max(longest, current);
+    previous = time;
+  });
+  return longest;
+}
 export default function Game() {
   const db = browserClient();
   const [user, setUser] = useState<string | null>(null),
@@ -45,6 +73,8 @@ export default function Game() {
     ),
     [leaders, setLeaders] = useState<Score[]>([]),
     [seasonLeaders, setSeasonLeaders] = useState<Score[]>([]),
+    [seasonStats, setSeasonStats] = useState<Record<string, SeasonStats>>({}),
+    [selectedSeasonUserId, setSelectedSeasonUserId] = useState<string | null>(null),
     [week, setWeek] = useState(pickingWeek(new Date())),
     [locked, setLocked] = useState(false),
     [message, setMessage] = useState(""),
@@ -77,7 +107,7 @@ export default function Game() {
       weekRef.current = w;
       setWeek(w);
     }
-    const [cats, ws, ev, lb, sl, profiles, lineupStatus] =
+    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonWeekScores] =
       await Promise.all([
       db
         .from("categories")
@@ -104,6 +134,12 @@ export default function Game() {
         .select("id,username,avatar_url")
         .order("username"),
       db.from("picks").select("user_id,points").eq("week_id", w),
+      db
+        .from("weekly_scores")
+        .select("user_id,week_id,score")
+        .gte("week_id", FIRST_SEASON_START)
+        .lte("week_id", FIRST_SEASON_END)
+        .order("week_id"),
     ]);
     setCategories((cats.data || []) as Category[]);
     const lockAt =
@@ -152,6 +188,33 @@ export default function Game() {
     };
     const rawLeaders = includeZeroScores((lb.data || []) as Score[]);
     const rawSeasonLeaders = includeZeroScores((sl.data || []) as Score[]);
+    const scoresByPlayer = new Map<string, SeasonWeekScore[]>();
+    ((seasonWeekScores.data || []) as SeasonWeekScore[]).forEach((row) => {
+      const rows = scoresByPlayer.get(row.user_id) || [];
+      rows.push(row);
+      scoresByPlayer.set(row.user_id, rows);
+    });
+    const nextSeasonStats: Record<string, SeasonStats> = {};
+    allPlayers.forEach((player) => {
+      const rows = (scoresByPlayer.get(player.id) || []).sort((a, b) =>
+        a.week_id.localeCompare(b.week_id),
+      );
+      const totalScore = rows.reduce((sum, row) => sum + row.score, 0);
+      const best = rows.reduce<SeasonWeekScore | null>(
+        (currentBest, row) =>
+          !currentBest || row.score > currentBest.score ? row : currentBest,
+        null,
+      );
+      nextSeasonStats[player.id] = {
+        weeksPlayed: rows.length,
+        longestStreak: longestWeeklyStreak(rows.map((row) => row.week_id)),
+        highestWeeklyScore: best?.score ?? 0,
+        averageWeeklyScore: rows.length ? Math.round(totalScore / rows.length) : 0,
+        bestWeek: best?.week_id ?? null,
+        hundredPointWeeks: rows.filter((row) => row.score >= 100).length,
+      };
+    });
+    setSeasonStats(nextSeasonStats);
     const avatarPaths = [
       ...new Set(
         [...rawLeaders, ...rawSeasonLeaders]
@@ -253,7 +316,18 @@ export default function Game() {
       Object.prototype.hasOwnProperty.call(events, birthdayCategory.id),
     birthdayActual = birthdayCategory ? events[birthdayCategory.id] || 0 : 0,
     bonus = birthdayScored ? birthdayBonus(birthdayGuess, birthdayActual) : 0,
-    score = baseScore + bonus;
+    score = baseScore + bonus,
+    selectedSeasonPlayer = seasonLeaders.find(
+      (player) => player.user_id === selectedSeasonUserId,
+    ),
+    selectedSeasonPlayerStats = selectedSeasonPlayer
+      ? seasonStats[selectedSeasonPlayer.user_id]
+      : undefined,
+    selectedSeasonRank = selectedSeasonPlayer
+      ? seasonLeaders.findIndex(
+          (player) => player.user_id === selectedSeasonPlayer.user_id,
+        ) + 1
+      : 0;
   async function save() {
     setMessage("");
     const body: Pick[] = allocationCategories.map((c) => ({
@@ -470,7 +544,22 @@ export default function Game() {
                     <span className="player-cell">
                       <Avatar name={p.username} url={p.avatar_url} size={34} />
                       <span className="player-name-line">
-                        <span>{p.username}</span>
+                        {tab === "season" ? (
+                          <button
+                            type="button"
+                            className="leaderboard-user-button"
+                            onClick={() =>
+                              setSelectedSeasonUserId((selected) =>
+                                selected === p.user_id ? null : p.user_id,
+                              )
+                            }
+                            aria-expanded={selectedSeasonUserId === p.user_id}
+                          >
+                            {p.username}
+                          </button>
+                        ) : (
+                          <span>{p.username}</span>
+                        )}
                         {tab === "weekly" && (
                           <span
                             className={`pick-status-badge ${
@@ -502,6 +591,49 @@ export default function Game() {
               ))}
             </tbody>
           </table>
+          {tab === "season" &&
+            selectedSeasonPlayer &&
+            selectedSeasonPlayerStats && (
+              <section className="season-stats-card" aria-live="polite">
+                <div className="season-stats-heading">
+                  <div className="profile-heading">
+                    <Avatar
+                      name={selectedSeasonPlayer.username}
+                      url={selectedSeasonPlayer.avatar_url}
+                      size={48}
+                    />
+                    <div>
+                      <span className="eyebrow">Season profile</span>
+                      <h3>{selectedSeasonPlayer.username}</h3>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="season-stats-close"
+                    onClick={() => setSelectedSeasonUserId(null)}
+                    aria-label="Close season statistics"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="season-stats-grid">
+                  <div className="season-stat"><span>Season rank</span><strong>#{selectedSeasonRank}</strong></div>
+                  <div className="season-stat"><span>Total points</span><strong>{selectedSeasonPlayer.score}</strong></div>
+                  <div className="season-stat"><span>Weeks played</span><strong>{selectedSeasonPlayerStats.weeksPlayed}</strong></div>
+                  <div className="season-stat"><span>Longest streak</span><strong>{selectedSeasonPlayerStats.longestStreak} {selectedSeasonPlayerStats.longestStreak === 1 ? "week" : "weeks"}</strong></div>
+                  <div className="season-stat"><span>Highest weekly score</span><strong>{selectedSeasonPlayerStats.highestWeeklyScore}</strong></div>
+                  <div className="season-stat"><span>Average per week</span><strong>{selectedSeasonPlayerStats.averageWeeklyScore}</strong></div>
+                  <div className="season-stat"><span>Best week</span><strong>{selectedSeasonPlayerStats.bestWeek ? formatDate(selectedSeasonPlayerStats.bestWeek) : "—"}</strong></div>
+                  <div className="season-stat"><span>100+ point weeks</span><strong>{selectedSeasonPlayerStats.hundredPointWeeks}</strong></div>
+                </div>
+                {selectedSeasonPlayerStats.weeksPlayed === 0 && (
+                  <p className="muted season-stats-note">No official season weeks played yet.</p>
+                )}
+                <p className="muted season-stats-note">
+                  Official season: {formatDate(FIRST_SEASON_START)} through {formatDate(FIRST_SEASON_END)}
+                </p>
+              </section>
+            )}
         </div>
       ) : (
         <div className="panel">
