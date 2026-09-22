@@ -209,6 +209,15 @@ begin
   if p_week <> current_monday then
     raise exception 'Only the current broadcast week can be scored';
   end if;
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtext('mooberball_finalize_closed_weeks')
+  );
+  if exists (
+    select 1 from public.finalized_weeks
+    where week_id=p_week and scores_finalized_at is not null
+  ) then
+    raise exception 'Weekly scores are finalized';
+  end if;
   if not exists (
     select 1 from public.categories
     where id=p_category_id and active
@@ -337,7 +346,8 @@ revoke all on schema private from public,anon,authenticated;
 
 create table public.finalized_weeks (
   week_id date primary key references public.weeks(id) on delete cascade,
-  finalized_at timestamptz not null default now()
+  finalized_at timestamptz not null default now(),
+  scores_finalized_at timestamptz
 );
 
 create table public.weekly_score_snapshots (
@@ -388,8 +398,11 @@ select
   (
     b.base_score+
     case
-      when bp.guess is null or ba.actual is null then 0
-      else greatest(0,50-abs(bp.guess-ba.actual)*5)
+      when bp.guess is null or not exists (
+        select 1 from public.finalized_weeks f
+        where f.week_id=b.week_id and f.scores_finalized_at is not null
+      ) then 0
+      else greatest(5,50-abs(bp.guess-coalesce(ba.actual,0))*2)
     end
   )::bigint score,
   b.avatar_url
@@ -404,12 +417,20 @@ select c.week_id,c.user_id,c.username,c.score,c.avatar_url
 from public.calculated_weekly_scores c
 where not exists (
   select 1 from public.finalized_weeks f where f.week_id=c.week_id
+) or exists (
+  select 1 from public.finalized_weeks f
+  where f.week_id=c.week_id and f.scores_finalized_at is null
+    and c.week_id=(now() at time zone 'America/New_York')::date
+      -(extract(isodow from now() at time zone 'America/New_York')::integer-1)
 )
 union all
 select s.week_id,s.user_id,p.username,s.score,p.avatar_url
 from public.weekly_score_snapshots s
 join public.profiles p on p.id=s.user_id
-join public.finalized_weeks f on f.week_id=s.week_id;
+join public.finalized_weeks f on f.week_id=s.week_id
+where f.scores_finalized_at is not null
+  or s.week_id<>(now() at time zone 'America/New_York')::date
+    -(extract(isodow from now() at time zone 'America/New_York')::integer-1);
 
 grant select on public.calculated_weekly_scores to authenticated;
 grant select on public.weekly_scores to authenticated;
@@ -505,3 +526,77 @@ create trigger archive_category_instead_of_delete
 before delete on public.categories
 for each row
 execute function private.archive_category_instead_of_delete();
+
+-- Commissioner awards birthday bonuses once the broadcast week ends.
+create or replace function public.finalize_week_scores(p_week date)
+returns integer language plpgsql security definer set search_path=''
+as $function$
+declare
+  current_monday date;
+  awarded integer;
+begin
+  if (select auth.uid()) is null or not public.is_commissioner() then
+    raise exception 'Commissioner access required' using errcode='42501';
+  end if;
+  current_monday:=(now() at time zone 'America/New_York')::date
+    -(extract(isodow from now() at time zone 'America/New_York')::integer-1);
+  if p_week<>current_monday then
+    raise exception 'Only the current broadcast week can be finalized';
+  end if;
+  if now()<(((p_week+4)::timestamp+interval '17 hours')
+      at time zone 'America/New_York') then
+    raise exception 'Finalize after Friday at 5:00 p.m. Eastern';
+  end if;
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtext('mooberball_finalize_closed_weeks')
+  );
+  if not exists (select 1 from public.weeks where id=p_week) then
+    raise exception 'This week has no scores to finalize';
+  end if;
+  insert into public.finalized_weeks(week_id,scores_finalized_at)
+  values(p_week,now())
+  on conflict(week_id) do update
+    set scores_finalized_at=excluded.scores_finalized_at
+    where public.finalized_weeks.scores_finalized_at is null;
+  if not found then
+    raise exception 'Scores have already been finalized';
+  end if;
+  insert into public.weekly_score_snapshots(week_id,user_id,score)
+  select c.week_id,c.user_id,c.score
+  from public.calculated_weekly_scores c where c.week_id=p_week
+  on conflict(week_id,user_id) do update
+    set score=excluded.score,finalized_at=now();
+  get diagnostics awarded=row_count;
+  return awarded;
+end
+$function$;
+revoke all on function public.finalize_week_scores(date) from public,anon;
+grant execute on function public.finalize_week_scores(date) to authenticated;
+
+create or replace function private.prevent_finalized_event_edits()
+returns trigger language plpgsql security definer set search_path=''
+as $function$
+declare target_week date;
+begin
+  target_week:=case when tg_op='INSERT' then new.week_id else old.week_id end;
+  if exists (
+    select 1 from public.finalized_weeks
+    where week_id=target_week
+      and scores_finalized_at is not null
+  ) then
+    raise exception 'Weekly scores are finalized';
+  end if;
+  if tg_op='UPDATE' and new.week_id<>old.week_id and exists (
+    select 1 from public.finalized_weeks
+    where week_id=new.week_id and scores_finalized_at is not null
+  ) then
+    raise exception 'Weekly scores are finalized';
+  end if;
+  return case when tg_op='DELETE' then old else new end;
+end
+$function$;
+revoke all on function private.prevent_finalized_event_edits()
+from public,anon,authenticated;
+create trigger prevent_finalized_event_edits
+before insert or update or delete on public.events
+for each row execute function private.prevent_finalized_event_edits();
