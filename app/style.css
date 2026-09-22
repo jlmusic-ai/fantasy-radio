@@ -705,3 +705,11 @@ table:has(.player-cell) td:last-child {
   .weekly-breakdown-row { grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(46px, 1fr)); gap: 5px; font-size: 12px; }
   .weekly-breakdown-header { font-size: 10px; }
 }
+
+.scoring-log-bonus {
+  margin-top: 12px;
+  padding-top: 16px;
+  border-top: 2px solid var(--gold-dark);
+}
+.scoring-log-bonus p { margin: 0 0 4px; color: var(--gold); }
+.scoring-log-bonus .muted { font-size: 13px; }
