@@ -102,8 +102,10 @@ export default async function RulesContent() {
             <span>
               Guess how many times Bob will be wished a happy birthday that
               week. An exact guess earns 50 bonus points. Each number away from
-              the correct total subtracts five points, down to a minimum of
-              zero. This prediction does not use any of your 100 lineup points.
+              the correct total subtracts two points, down to a minimum of
+              five. Guesses above or below the total follow the same rule.
+              The commissioner awards the bonus when finalizing the week’s
+              scores. This prediction does not use any of your 100 lineup points.
             </span>
           </li>
           <li>
