@@ -678,3 +678,30 @@ table:has(.player-cell) td:last-child {
     max-height: 440px;
   }
 }
+
+/* Weekly player breakdown remains readable on narrow screens. */
+.weekly-breakdown-header,
+.weekly-breakdown-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(3, minmax(55px, 1fr));
+  gap: 10px;
+  align-items: center;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+}
+.weekly-breakdown-header { font-size: 12px; }
+.weekly-breakdown-row > :not(:first-child),
+.weekly-breakdown-header > :not(:first-child) { text-align: right; }
+.weekly-breakdown-row > :first-child { overflow-wrap: anywhere; }
+.weekly-breakdown-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 16px;
+  color: var(--gold);
+}
+@media (max-width: 560px) {
+  .weekly-breakdown-header,
+  .weekly-breakdown-row { grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(46px, 1fr)); gap: 5px; font-size: 12px; }
+  .weekly-breakdown-header { font-size: 10px; }
+}
