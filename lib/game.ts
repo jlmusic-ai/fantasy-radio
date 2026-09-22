@@ -82,5 +82,5 @@ export function validPicks(
   );
 }
 export function birthdayBonus(guess: number | null, actual: number) {
-  return guess === null ? 0 : Math.max(0, 50 - Math.abs(guess - actual) * 5);
+  return guess === null ? 0 : Math.max(5, 50 - Math.abs(guess - actual) * 2);
 }
