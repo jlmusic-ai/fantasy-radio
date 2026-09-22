@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { browserClient } from "../../../lib/supabase";
-import { formatDate, weekStart } from "../../../lib/game";
+import { formatDate, pickingWeek, weekStart } from "../../../lib/game";
 
 type Category = {
   id: string;
@@ -17,8 +17,12 @@ export default function ScoreThisWeek() {
   const [totals, setTotals] = useState<Record<string, number>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<string | null>(null);
+  const [finalizing, setFinalizing] = useState(false);
+  const [finalized, setFinalized] = useState(false);
+  const [now, setNow] = useState(Date.now());
   const [message, setMessage] = useState("");
-  const week = weekStart(new Date());
+  const week = weekStart(new Date(now));
+  const canFinalize = pickingWeek(new Date(now)) > week;
 
   async function load() {
     const {
@@ -34,7 +38,7 @@ export default function ScoreThisWeek() {
     if (!profile?.is_commissioner) return;
     setAllowed(true);
 
-    const [categoryResult, eventResult] = await Promise.all([
+    const [categoryResult, eventResult, finalizationResult] = await Promise.all([
       db
         .from("categories")
         .select("id,name,display_order")
@@ -45,6 +49,8 @@ export default function ScoreThisWeek() {
         .from("events")
         .select("category_id,quantity")
         .eq("week_id", week),
+      db.from("finalized_weeks").select("scores_finalized_at")
+        .eq("week_id", week).maybeSingle(),
     ]);
 
     const nextCategories = (categoryResult.data || []) as Category[];
@@ -54,6 +60,7 @@ export default function ScoreThisWeek() {
         (nextTotals[event.category_id] || 0) + event.quantity;
     });
     setCategories(nextCategories);
+    setFinalized(Boolean(finalizationResult.data?.scores_finalized_at));
     setTotals(nextTotals);
     setDrafts(
       Object.fromEntries(
@@ -66,13 +73,16 @@ export default function ScoreThisWeek() {
   }
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, [week]);
 
   async function updateTotal(
     categoryId: string,
     change: { delta: number } | { target: number },
   ) {
+    if (finalized || finalizing) return;
     setSaving(categoryId);
     setMessage("");
     const { data, error } = await db.rpc("adjust_weekly_occurrences", {
@@ -100,6 +110,7 @@ export default function ScoreThisWeek() {
   }
 
   function saveDraft(categoryId: string) {
+    if (finalized || finalizing) return;
     const value = Number(drafts[categoryId]);
     if (!Number.isInteger(value) || value < 0 || value > 5000) {
       setMessage("Enter a whole number between 0 and 5000.");
@@ -112,6 +123,22 @@ export default function ScoreThisWeek() {
     if (value !== (totals[categoryId] || 0)) {
       updateTotal(categoryId, { target: value });
     }
+  }
+
+  async function finalizeScores() {
+    if (!canFinalize || finalized || finalizing || saving) return;
+    if (!window.confirm("Finalize this week’s scores and award the birthday bonus? You won’t be able to edit these totals afterward.")) return;
+    setFinalizing(true);
+    setMessage("");
+    const { data, error } = await db.rpc("finalize_week_scores", { p_week: week });
+    setFinalizing(false);
+    if (error) {
+      setMessage(error.message);
+      await load();
+      return;
+    }
+    setFinalized(true);
+    setMessage(`Scores finalized for ${Number(data)} ${Number(data) === 1 ? "player" : "players"}. Birthday bonuses have been awarded.`);
   }
 
   if (!allowed) {
@@ -140,7 +167,7 @@ export default function ScoreThisWeek() {
                 className="score-step"
                 type="button"
                 aria-label={`Subtract one from ${category.name}`}
-                disabled={busy || (totals[category.id] || 0) === 0}
+                disabled={busy || finalizing || finalized || (totals[category.id] || 0) === 0}
                 onClick={() => updateTotal(category.id, { delta: -1 })}
               >
                 −
@@ -154,7 +181,7 @@ export default function ScoreThisWeek() {
                 max="5000"
                 step="1"
                 value={drafts[category.id] ?? "0"}
-                disabled={busy}
+                disabled={busy || finalizing || finalized}
                 onChange={(event) =>
                   setDrafts((current) => ({
                     ...current,
@@ -170,7 +197,7 @@ export default function ScoreThisWeek() {
                 className="score-step"
                 type="button"
                 aria-label={`Add one to ${category.name}`}
-                disabled={busy}
+                disabled={busy || finalizing || finalized}
                 onClick={() => updateTotal(category.id, { delta: 1 })}
               >
                 +
@@ -179,8 +206,28 @@ export default function ScoreThisWeek() {
           </div>
         );
       })}
+      <section className="panel">
+        <h2>Finalize scores</h2>
+        <p className="muted">
+          After Friday at 5:00 p.m. Eastern, check every occurrence total and
+          finalize the week to award the birthday bonus. An exact guess earns
+          50 points; each number away earns two fewer, with a minimum of five.
+          Scores and occurrence totals cannot be changed after finalization.
+        </p>
+        {finalized ? (
+          <p className="success">This week’s scores are finalized. Birthday bonuses are included.</p>
+        ) : (
+          <button type="button" disabled={!canFinalize || finalizing || Boolean(saving)}
+            onClick={() => void finalizeScores()}>
+            {finalizing ? "Finalizing…" : "Finalize scores and award birthday bonus"}
+          </button>
+        )}
+        {!canFinalize && !finalized && (
+          <p className="muted">Available Friday at 5:00 p.m. Eastern.</p>
+        )}
+      </section>
       {message && (
-        <p className={message === "Score updated." ? "success" : "error"}>
+        <p className={message === "Score updated." || message.startsWith("Scores finalized") ? "success" : "error"}>
           {message}
         </p>
       )}
