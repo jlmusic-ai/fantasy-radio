@@ -19,6 +19,9 @@ export default function ScoreThisWeek() {
   const [saving, setSaving] = useState<string | null>(null);
   const [finalizing, setFinalizing] = useState(false);
   const [finalized, setFinalized] = useState(false);
+  const [dailyComplete, setDailyComplete] = useState(false);
+  const [dailySaving, setDailySaving] = useState(false);
+  const [dailyMessage, setDailyMessage] = useState("");
   const [now, setNow] = useState(Date.now());
   const [message, setMessage] = useState("");
   const week = weekStart(new Date(now));
@@ -38,7 +41,7 @@ export default function ScoreThisWeek() {
     if (!profile?.is_commissioner) return;
     setAllowed(true);
 
-    const [categoryResult, eventResult, finalizationResult] = await Promise.all([
+    const [categoryResult, eventResult, finalizationResult, dailyStatusResult] = await Promise.all([
       db
         .from("categories")
         .select("id,name,display_order")
@@ -51,6 +54,7 @@ export default function ScoreThisWeek() {
         .eq("week_id", week),
       db.from("finalized_weeks").select("scores_finalized_at")
         .eq("week_id", week).maybeSingle(),
+      db.rpc("today_scoring_status").single(),
     ]);
 
     const nextCategories = (categoryResult.data || []) as Category[];
@@ -61,6 +65,7 @@ export default function ScoreThisWeek() {
     });
     setCategories(nextCategories);
     setFinalized(Boolean(finalizationResult.data?.scores_finalized_at));
+    setDailyComplete(Boolean(dailyStatusResult.data?.completed));
     setTotals(nextTotals);
     setDrafts(
       Object.fromEntries(
@@ -125,6 +130,28 @@ export default function ScoreThisWeek() {
     }
   }
 
+  async function toggleDailyScoring() {
+    if (dailySaving) return;
+    setDailySaving(true);
+    setDailyMessage("");
+    const nextComplete = !dailyComplete;
+    const { error } = await db.rpc("set_today_scoring_complete", {
+      p_complete: nextComplete,
+    });
+    setDailySaving(false);
+    if (error) {
+      setDailyMessage(error.message);
+      await load();
+      return;
+    }
+    setDailyComplete(nextComplete);
+    setDailyMessage(
+      nextComplete
+        ? "Today’s scoring is now marked complete."
+        : "Today’s scoring is now marked incomplete.",
+    );
+  }
+
   async function finalizeScores() {
     if (!canFinalize || finalized || finalizing || saving) return;
     if (!window.confirm("Finalize this week’s scores and award the birthday bonus? You won’t be able to edit these totals afterward.")) return;
@@ -157,6 +184,42 @@ export default function ScoreThisWeek() {
         Week beginning {formatDate(week)}. Tap plus or minus as moments happen,
         or enter the weekly total directly.
       </p>
+      <section className="panel">
+        <h2>Today’s scoring status</h2>
+        <p className="muted">
+          Mark today complete after you have finished scoring the podcast.
+          You can undo this if you need to make a correction. A new day
+          automatically starts as incomplete at midnight Eastern.
+        </p>
+        <div
+          className={`daily-scoring-status ${
+            dailyComplete ? "daily-scoring-complete" : "daily-scoring-pending"
+          }`}
+          role="status"
+        >
+          <strong>
+            {dailyComplete
+              ? "Today’s scoring is complete."
+              : "Today’s scoring has not yet been completed."}
+          </strong>
+        </div>
+        <button
+          type="button"
+          disabled={dailySaving}
+          onClick={() => void toggleDailyScoring()}
+        >
+          {dailySaving
+            ? "Updating…"
+            : dailyComplete
+              ? "Undo: mark today incomplete"
+              : "Mark today’s scoring complete"}
+        </button>
+        {dailyMessage && (
+          <p className={dailyMessage.includes("now marked") ? "success" : "error"}>
+            {dailyMessage}
+          </p>
+        )}
+      </section>
       {categories.map((category) => {
         const busy = saving === category.id;
         return (
