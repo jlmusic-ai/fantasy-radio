@@ -600,3 +600,94 @@ from public,anon,authenticated;
 create trigger prevent_finalized_event_edits
 before insert or update or delete on public.events
 for each row execute function private.prevent_finalized_event_edits();
+
+
+-- Track whether the commissioner has finished scoring each Pittsburgh day.
+create table public.daily_scoring_status (
+  scoring_date date primary key,
+  week_id date not null references public.weeks(id) on delete cascade,
+  completed_at timestamptz not null default now(),
+  completed_by uuid not null references public.profiles(id)
+);
+create index daily_scoring_status_week
+  on public.daily_scoring_status(week_id,scoring_date);
+alter table public.daily_scoring_status enable row level security;
+create policy daily_scoring_status_read
+  on public.daily_scoring_status
+  for select to authenticated using(true);
+revoke insert,update,delete,truncate
+  on public.daily_scoring_status from anon,authenticated;
+
+create or replace function public.today_scoring_status()
+returns table(
+  scoring_date date,
+  week_id date,
+  completed boolean,
+  completed_at timestamptz
+)
+language sql stable security invoker set search_path=''
+as $function$
+  with today as (
+    select (now() at time zone 'America/New_York')::date as scoring_date
+  ), current_week as (
+    select
+      scoring_date,
+      scoring_date
+        -(extract(isodow from scoring_date)::integer-1) as week_id
+    from today
+  )
+  select
+    current_week.scoring_date,
+    current_week.week_id,
+    status.scoring_date is not null,
+    status.completed_at
+  from current_week
+  left join public.daily_scoring_status status
+    on status.scoring_date=current_week.scoring_date;
+$function$;
+revoke all on function public.today_scoring_status() from public,anon;
+grant execute on function public.today_scoring_status() to authenticated;
+
+create or replace function public.set_today_scoring_complete(p_complete boolean)
+returns boolean
+language plpgsql security definer set search_path=''
+as $function$
+declare
+  today date;
+  current_week date;
+begin
+  if (select auth.uid()) is null or not public.is_commissioner() then
+    raise exception 'Commissioner access required' using errcode='42501';
+  end if;
+  today:=(now() at time zone 'America/New_York')::date;
+  current_week:=today-(extract(isodow from today)::integer-1);
+  if p_complete then
+    if not exists(select 1 from public.weeks where id=current_week) then
+      insert into public.weeks(id,lock_at,season_start)
+      values(
+        current_week,
+        (current_week::timestamp+time '06:00') at time zone 'America/New_York',
+        case
+          when current_week between date '2026-10-05' and date '2026-11-20'
+            then date '2026-10-05'
+          else current_week
+        end
+      );
+    end if;
+    insert into public.daily_scoring_status(
+      scoring_date,week_id,completed_at,completed_by
+    )
+    values(today,current_week,now(),(select auth.uid()))
+    on conflict(scoring_date) do update
+      set completed_at=excluded.completed_at,
+          completed_by=excluded.completed_by;
+  else
+    delete from public.daily_scoring_status where scoring_date=today;
+  end if;
+  return p_complete;
+end
+$function$;
+revoke all on function public.set_today_scoring_complete(boolean)
+  from public,anon;
+grant execute on function public.set_today_scoring_complete(boolean)
+  to authenticated;
