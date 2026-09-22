@@ -93,8 +93,8 @@ create policy categories_public_active_read on categories for select to anon usi
 create policy categories_admin on categories for all to authenticated using(is_commissioner()) with check(is_commissioner());
 create policy weeks_read on weeks for select to authenticated using(true);
 create policy weeks_admin on weeks for all to authenticated using(is_commissioner()) with check(is_commissioner());
-create policy picks_read on picks for select to authenticated using(true);
-create policy birthday_predictions_read on birthday_predictions for select to authenticated using(true);
+create policy picks_read on picks for select to authenticated using(user_id=(select auth.uid()) or exists(select 1 from public.weeks w where w.id=week_id and now()>=w.lock_at));
+create policy birthday_predictions_read on birthday_predictions for select to authenticated using(user_id=(select auth.uid()) or exists(select 1 from public.weeks w where w.id=week_id and now()>=w.lock_at));
 create policy events_read on events for select to authenticated using(true);
 create policy events_admin on events for all to authenticated using(is_commissioner()) with check(is_commissioner());
 revoke all on function public.submit_lineup(date,jsonb,integer) from public,anon;
@@ -274,8 +274,9 @@ insert into categories(name,description,scoring_type,display_order) values ('Pit
 
 -- Compact summaries keep leaderboard payloads below the Data API row cap
 -- when Mooberball grows to hundreds of players.
+-- Only the total allocation status is visible while lineups are open.
 create or replace view public.weekly_lineup_status
-with (security_invoker=true) as
+with (security_invoker=false) as
 select week_id,user_id,sum(points)::integer allocated_points
 from public.picks
 group by week_id,user_id;
