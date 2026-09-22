@@ -603,6 +603,7 @@ for each row execute function private.prevent_finalized_event_edits();
 
 
 -- Track whether the commissioner has finished scoring each Pittsburgh day.
+-- A new Pittsburgh calendar date has no row and therefore starts incomplete.
 create table public.daily_scoring_status (
   scoring_date date primary key,
   week_id date not null references public.weeks(id) on delete cascade,
