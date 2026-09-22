@@ -40,6 +40,8 @@ export default async function RulesContent() {
         <p className="eyebrow">Welcome to</p>
         <h1>Mooberball</h1>
         <p className="rules-intro">
+          <strong>Welcome, Moober!</strong>
+          <br />
           Mooberball is a fan-made fantasy game built around the wonderfully
           unpredictable world of Mikey and Bob. Make your predictions,
           listen for the moments you picked, and see how your lineup stacks up
@@ -121,6 +123,35 @@ export default async function RulesContent() {
             <span>
               Weekly standings rank that week&apos;s scores. Season standings
               combine each player&apos;s points across the full season.
+            </span>
+          </li>
+        </ol>
+      </section>
+
+      <section className="panel rules-panel">
+        <h2>Scoring</h2>
+        <ol className="rules-list">
+          <li>
+            <strong>Scoring is based on the podcast.</strong>
+            <span>
+              Scores are calculated based on the podcast, not the live show.
+              If something happens on the live show but is not included in the
+              podcast, it will not be included in scoring.
+            </span>
+          </li>
+          <li>
+            <strong>Lineup items limit listener influence.</strong>
+            <span>
+              The lineup is made up mostly of items that cannot be directly
+              affected by talkback messages.
+            </span>
+          </li>
+          <li>
+            <strong>Today in Freakshow History counts.</strong>
+            <span>
+              If a lineup item is included in Today in Freakshow History, it
+              will be included in scoring unless it was specifically requested
+              by a listener.
             </span>
           </li>
         </ol>
