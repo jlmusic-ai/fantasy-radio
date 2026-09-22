@@ -65,7 +65,9 @@ export default function ScoreThisWeek() {
     });
     setCategories(nextCategories);
     setFinalized(Boolean(finalizationResult.data?.scores_finalized_at));
-    setDailyComplete(Boolean(dailyStatusResult.data?.completed));
+    setDailyComplete(
+      Boolean((dailyStatusResult.data as { completed?: boolean } | null)?.completed),
+    );
     setTotals(nextTotals);
     setDrafts(
       Object.fromEntries(
