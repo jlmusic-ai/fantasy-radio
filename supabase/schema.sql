@@ -692,3 +692,19 @@ revoke all on function public.set_today_scoring_complete(boolean)
   from public,anon;
 grant execute on function public.set_today_scoring_complete(boolean)
   to authenticated;
+
+
+-- Keep Sunday pick reminders idempotent across cron retries and deployments.
+create table public.pick_reminder_sends (
+  week_id date not null references public.weeks(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  status text not null default 'pending'
+    check(status in ('pending','sent')),
+  created_at timestamptz not null default now(),
+  sent_at timestamptz,
+  primary key(week_id,user_id)
+);
+create index pick_reminder_sends_created_at
+  on public.pick_reminder_sends(created_at);
+alter table public.pick_reminder_sends enable row level security;
+revoke all on public.pick_reminder_sends from anon,authenticated;
