@@ -713,3 +713,20 @@ table:has(.player-cell) td:last-child {
 }
 .scoring-log-bonus p { margin: 0 0 4px; color: var(--gold); }
 .scoring-log-bonus .muted { font-size: 13px; }
+
+.daily-scoring-status {
+  margin: 16px 0;
+  padding: 13px 16px;
+  border: 1px solid;
+  border-radius: 10px;
+}
+.daily-scoring-complete {
+  border-color: #278a52;
+  background: rgba(39, 138, 82, 0.18);
+  color: #80dfac;
+}
+.daily-scoring-pending {
+  border-color: var(--gold-dark);
+  background: rgba(255, 202, 5, 0.10);
+  color: var(--gold);
+}
