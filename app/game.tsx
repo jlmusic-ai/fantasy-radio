@@ -73,6 +73,7 @@ export default function Game() {
     [categories, setCategories] = useState<Category[]>([]),
     [picks, setPicks] = useState<Record<string, number>>({}),
     [birthdayGuess, setBirthdayGuess] = useState<number | null>(null),
+    [bonusFinalized, setBonusFinalized] = useState(false),
     [events, setEvents] = useState<Record<string, number>>({}),
     [completedPickUsers, setCompletedPickUsers] = useState<Set<string>>(
       new Set(),
@@ -91,6 +92,7 @@ export default function Game() {
     [tab, setTab] = useState("picks"),
     [loading, setLoading] = useState(true);
   const weekRef = useRef(week);
+  const bonusFinalizedRef = useRef(false);
   const breakdownRequestRef = useRef(0);
   const avatarCacheRef = useRef(
     new Map<string, { url: string; expiresAt: number }>(),
@@ -124,7 +126,7 @@ export default function Game() {
       setWeeklyBreakdown(null);
       breakdownRequestRef.current++;
     }
-    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonStatsRows] =
+    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonStatsRows, finalization] =
       await Promise.all([
       db
         .from("categories")
@@ -160,8 +162,12 @@ export default function Game() {
         .from("season_player_stats")
         .select("user_id,weeks_played,longest_streak,highest_weekly_score,average_weekly_score,best_week,hundred_point_weeks")
         .limit(1000),
+      db.from("finalized_weeks").select("scores_finalized_at")
+        .eq("week_id", w).maybeSingle(),
     ]);
     setCategories((cats.data || []) as Category[]);
+    bonusFinalizedRef.current = Boolean(finalization.data?.scores_finalized_at);
+    setBonusFinalized(bonusFinalizedRef.current);
     const lockAt =
       pickWindowData?.closes_at || ws.data?.lock_at || defaultLockAt(w);
     const isLocked = Date.now() >= new Date(lockAt).getTime();
@@ -303,6 +309,13 @@ export default function Game() {
       if (nextWindow.active_week !== weekRef.current) {
         await load({ showLoading: false, hydratePicks: true });
       } else {
+        const { data: finalization } = await db.from("finalized_weeks")
+          .select("scores_finalized_at").eq("week_id", nextWindow.active_week)
+          .maybeSingle();
+        if (Boolean(finalization?.scores_finalized_at) !== bonusFinalizedRef.current) {
+          await load({ showLoading: false, hydratePicks: false });
+          return;
+        }
         const isLocked = Date.now() >= new Date(nextWindow.closes_at).getTime();
         setLocked(isLocked);
         if (!isLocked) {
@@ -346,11 +359,8 @@ export default function Game() {
       (a, c) => a + (picks[c.id] || 0) * (events[c.id] || 0),
       0,
     ),
-    birthdayScored =
-      birthdayCategory !== undefined &&
-      Object.prototype.hasOwnProperty.call(events, birthdayCategory.id),
     birthdayActual = birthdayCategory ? events[birthdayCategory.id] || 0 : 0,
-    bonus = birthdayScored ? birthdayBonus(birthdayGuess, birthdayActual) : 0,
+    bonus = bonusFinalized ? birthdayBonus(birthdayGuess, birthdayActual) : 0,
     score = baseScore + bonus,
     selectedWeeklyPlayer = leaders.find(
       (player) => player.user_id === selectedWeeklyUserId,
@@ -434,7 +444,7 @@ export default function Game() {
           <div className="muted">YOUR WEEKLY SCORE</div>
           <div className="score">{score} pts</div>
           <div className="muted">
-            {baseScore} lineup points · {bonus} birthday bonus
+            {baseScore} lineup points · {bonusFinalized ? `${bonus} birthday bonus` : "Birthday bonus pending"}
           </div>
           <div className="muted">Week beginning {formatDate(week)}</div>
         </div>
@@ -546,9 +556,9 @@ export default function Game() {
             <div className="panel">
               <h3>{birthdayCategory.name}</h3>
               <p className="muted">
-                {birthdayScored
+                {bonusFinalized
                   ? `${birthdayActual} occurrences · ${bonus} bonus points earned`
-                  : "Bonus pending until this week is scored."}
+                  : "Bonus points are awarded after the commissioner finalizes this week’s scores."}
               </p>
               <label>
                 Your guess
@@ -568,8 +578,9 @@ export default function Game() {
                 />
               </label>
               <p className="muted">
-                Exact guess: 50 bonus points. Each number away subtracts 5
-                points, down to 0.
+                Exact guess: 50 bonus points. Each number away subtracts 2
+                points, down to a minimum of 5. Awarded only when this week’s
+                scores are finalized.
               </p>
             </div>
           )}
@@ -713,8 +724,8 @@ export default function Game() {
                       <div className="weekly-breakdown-row">
                         <strong>{birthdayCategory.name}</strong>
                         <span>Guess: {weeklyBreakdown.guess ?? "—"}</span>
-                        <span>{birthdayScored ? birthdayActual : "Pending"}</span>
-                        <strong>{birthdayScored ? birthdayBonus(weeklyBreakdown.guess, birthdayActual) : 0}</strong>
+                        <span>{bonusFinalized ? birthdayActual : "Pending"}</span>
+                        <strong>{bonusFinalized ? birthdayBonus(weeklyBreakdown.guess, birthdayActual) : "Pending"}</strong>
                       </div>
                     )}
                     <div className="weekly-breakdown-total">
