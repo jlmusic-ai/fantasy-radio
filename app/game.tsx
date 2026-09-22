@@ -497,7 +497,7 @@ export default function Game() {
             void load({ showLoading: false, hydratePicks: false });
           }}
         >
-          Weekly standings
+          Weekly leaderboard
         </button>
         <button
           className={tab === "season" ? "active" : ""}
@@ -506,7 +506,7 @@ export default function Game() {
             void load({ showLoading: false, hydratePicks: false });
           }}
         >
-          Season standings
+          Season leaderboard
         </button>
         <button
           className={tab === "log" ? "active" : ""}
@@ -637,21 +637,11 @@ export default function Game() {
       ) : tab === "weekly" || tab === "season" ? (
         <div className="panel">
           <h2>{tab === "weekly" ? "Weekly" : "Season"} leaderboard</h2>
-          {tab === "weekly" && (
-            <div
-              className={`daily-scoring-status ${
-                dailyScoringComplete
-                  ? "daily-scoring-complete"
-                  : "daily-scoring-pending"
-              }`}
-              role="status"
-            >
-              <strong>
-                {dailyScoringComplete
-                  ? "Today’s scoring is complete."
-                  : "Today’s scoring has not yet been completed."}
-              </strong>
-            </div>
+          {tab === "season" && (
+            <p className="muted season-leaderboard-dates">
+              Official season: {formatDate(FIRST_SEASON_START)} through{" "}
+              {formatDate(FIRST_SEASON_END)}
+            </p>
           )}
           <div
             className="leaderboard-scroll"
