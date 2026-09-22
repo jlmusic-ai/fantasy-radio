@@ -18,6 +18,7 @@ type Category = {
   display_order: number;
 };
 type Pick = { category_id: string; points: number };
+type WeeklyBreakdown = { picks: Pick[]; guess: number | null };
 type PlayerProfile = {
   id: string;
   username: string;
@@ -80,12 +81,17 @@ export default function Game() {
     [seasonLeaders, setSeasonLeaders] = useState<Score[]>([]),
     [seasonStats, setSeasonStats] = useState<Record<string, SeasonStats>>({}),
     [selectedSeasonUserId, setSelectedSeasonUserId] = useState<string | null>(null),
+    [selectedWeeklyUserId, setSelectedWeeklyUserId] = useState<string | null>(null),
+    [weeklyBreakdown, setWeeklyBreakdown] = useState<WeeklyBreakdown | null>(null),
+    [breakdownLoading, setBreakdownLoading] = useState(false),
+    [breakdownError, setBreakdownError] = useState(""),
     [week, setWeek] = useState(pickingWeek(new Date())),
     [locked, setLocked] = useState(false),
     [message, setMessage] = useState(""),
     [tab, setTab] = useState("picks"),
     [loading, setLoading] = useState(true);
   const weekRef = useRef(week);
+  const breakdownRequestRef = useRef(0);
   const avatarCacheRef = useRef(
     new Map<string, { url: string; expiresAt: number }>(),
   );
@@ -114,6 +120,9 @@ export default function Game() {
     if (weekChanged) {
       weekRef.current = w;
       setWeek(w);
+      setSelectedWeeklyUserId(null);
+      setWeeklyBreakdown(null);
+      breakdownRequestRef.current++;
     }
     const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonStatsRows] =
       await Promise.all([
@@ -155,10 +164,13 @@ export default function Game() {
     setCategories((cats.data || []) as Category[]);
     const lockAt =
       pickWindowData?.closes_at || ws.data?.lock_at || defaultLockAt(w);
-    setLocked(
-      pickWindowData?.is_locked ??
-        Date.now() >= new Date(lockAt).getTime(),
-    );
+    const isLocked = Date.now() >= new Date(lockAt).getTime();
+    setLocked(isLocked);
+    if (!isLocked) {
+      setSelectedWeeklyUserId(null);
+      setWeeklyBreakdown(null);
+      breakdownRequestRef.current++;
+    }
     const counts: Record<string, number> = {};
     (ev.data || []).forEach(
       (e) =>
@@ -291,7 +303,13 @@ export default function Game() {
       if (nextWindow.active_week !== weekRef.current) {
         await load({ showLoading: false, hydratePicks: true });
       } else {
-        setLocked(nextWindow.is_locked);
+        const isLocked = Date.now() >= new Date(nextWindow.closes_at).getTime();
+        setLocked(isLocked);
+        if (!isLocked) {
+          setSelectedWeeklyUserId(null);
+          setWeeklyBreakdown(null);
+          breakdownRequestRef.current++;
+        }
       }
     };
     const rolloverCheck = window.setInterval(refreshPickWindow, 60_000);
@@ -334,6 +352,9 @@ export default function Game() {
     birthdayActual = birthdayCategory ? events[birthdayCategory.id] || 0 : 0,
     bonus = birthdayScored ? birthdayBonus(birthdayGuess, birthdayActual) : 0,
     score = baseScore + bonus,
+    selectedWeeklyPlayer = leaders.find(
+      (player) => player.user_id === selectedWeeklyUserId,
+    ),
     selectedSeasonPlayer = seasonLeaders.find(
       (player) => player.user_id === selectedSeasonUserId,
     ),
@@ -345,6 +366,37 @@ export default function Game() {
           (player) => player.user_id === selectedSeasonPlayer.user_id,
         ) + 1
       : 0;
+  async function showWeeklyBreakdown(playerId: string) {
+    if (!locked) return;
+    if (selectedWeeklyUserId === playerId) {
+      breakdownRequestRef.current++;
+      setSelectedWeeklyUserId(null);
+      setWeeklyBreakdown(null);
+      return;
+    }
+    const requestId = ++breakdownRequestRef.current;
+    setSelectedWeeklyUserId(playerId);
+    setWeeklyBreakdown(null);
+    setBreakdownError("");
+    setBreakdownLoading(true);
+    const [savedPicks, savedGuess] = await Promise.all([
+      db.from("picks").select("category_id,points")
+        .eq("week_id", week).eq("user_id", playerId),
+      db.from("birthday_predictions").select("guess")
+        .eq("week_id", week).eq("user_id", playerId).maybeSingle(),
+    ]);
+    if (requestId !== breakdownRequestRef.current) return;
+    // The database enforces the lock too, including for direct API requests.
+    if (savedPicks.error || savedGuess.error) {
+      setBreakdownError("Unable to load this lineup right now.");
+    } else {
+      setWeeklyBreakdown({
+        picks: (savedPicks.data || []) as Pick[],
+        guess: savedGuess.data?.guess ?? null,
+      });
+    }
+    setBreakdownLoading(false);
+  }
   async function save() {
     setMessage("");
     const body: Pick[] = allocationCategories.map((c) => ({
@@ -579,6 +631,15 @@ export default function Game() {
                           >
                             {p.username}
                           </button>
+                        ) : locked ? (
+                          <button
+                            type="button"
+                            className="leaderboard-user-button"
+                            onClick={() => void showWeeklyBreakdown(p.user_id)}
+                            aria-expanded={selectedWeeklyUserId === p.user_id}
+                          >
+                            {p.username}
+                          </button>
                         ) : (
                           <span>{p.username}</span>
                         )}
@@ -615,6 +676,55 @@ export default function Game() {
             </tbody>
             </table>
           </div>
+          {tab === "weekly" && locked && selectedWeeklyPlayer && (
+            <section className="season-stats-card" aria-live="polite">
+              <div className="season-stats-heading">
+                <div className="profile-heading">
+                  <Avatar name={selectedWeeklyPlayer.username} url={selectedWeeklyPlayer.avatar_url} size={48} />
+                  <div>
+                    <span className="eyebrow">Week beginning {formatDate(week)}</span>
+                    <h3>{selectedWeeklyPlayer.username}&apos;s lineup</h3>
+                  </div>
+                </div>
+                <button type="button" className="season-stats-close"
+                  onClick={() => { breakdownRequestRef.current++; setSelectedWeeklyUserId(null); setWeeklyBreakdown(null); }}
+                  aria-label="Close weekly lineup">×</button>
+              </div>
+              {breakdownLoading ? <p>Loading lineup…</p> : breakdownError ? (
+                <p className="error">{breakdownError}</p>
+              ) : weeklyBreakdown ? (
+                weeklyBreakdown.picks.length === 0 ? <p>No lineup submitted for this week.</p> : (
+                  <>
+                    <div className="weekly-breakdown-header muted">
+                      <span>Topic</span><span>Allocated</span><span>Occurrences</span><span>Earned</span>
+                    </div>
+                    {weeklyBreakdown.picks.map((pick) => {
+                      const topic = categories.find((c) => c.id === pick.category_id);
+                      const count = events[pick.category_id] || 0;
+                      return (
+                        <div className="weekly-breakdown-row" key={pick.category_id}>
+                          <strong>{topic?.name || "Retired topic"}</strong>
+                          <span>{pick.points}</span><span>{count}</span>
+                          <strong>{pick.points * count}</strong>
+                        </div>
+                      );
+                    })}
+                    {birthdayCategory && (
+                      <div className="weekly-breakdown-row">
+                        <strong>{birthdayCategory.name}</strong>
+                        <span>Guess: {weeklyBreakdown.guess ?? "—"}</span>
+                        <span>{birthdayScored ? birthdayActual : "Pending"}</span>
+                        <strong>{birthdayScored ? birthdayBonus(weeklyBreakdown.guess, birthdayActual) : 0}</strong>
+                      </div>
+                    )}
+                    <div className="weekly-breakdown-total">
+                      <strong>Weekly score</strong><strong>{selectedWeeklyPlayer.score} pts</strong>
+                    </div>
+                  </>
+                )
+              ) : null}
+            </section>
+          )}
           {tab === "season" &&
             selectedSeasonPlayer &&
             selectedSeasonPlayerStats && (
