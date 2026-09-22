@@ -35,6 +35,12 @@ type PickWindow = {
   closes_at: string;
   is_locked: boolean;
 };
+type DailyScoringStatus = {
+  scoring_date: string;
+  week_id: string;
+  completed: boolean;
+  completed_at: string | null;
+};
 type SeasonStatsRow = {
   user_id: string;
   weeks_played: number;
@@ -88,6 +94,7 @@ export default function Game() {
     [breakdownError, setBreakdownError] = useState(""),
     [week, setWeek] = useState(pickingWeek(new Date())),
     [locked, setLocked] = useState(false),
+    [dailyScoringComplete, setDailyScoringComplete] = useState(false),
     [message, setMessage] = useState(""),
     [tab, setTab] = useState("picks"),
     [loading, setLoading] = useState(true);
@@ -126,7 +133,7 @@ export default function Game() {
       setWeeklyBreakdown(null);
       breakdownRequestRef.current++;
     }
-    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonStatsRows, finalization] =
+    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonStatsRows, finalization, dailyStatus] =
       await Promise.all([
       db
         .from("categories")
@@ -164,8 +171,12 @@ export default function Game() {
         .limit(1000),
       db.from("finalized_weeks").select("scores_finalized_at")
         .eq("week_id", w).maybeSingle(),
+      db.rpc("today_scoring_status").single(),
     ]);
     setCategories((cats.data || []) as Category[]);
+    setDailyScoringComplete(
+      Boolean((dailyStatus.data as DailyScoringStatus | null)?.completed),
+    );
     bonusFinalizedRef.current = Boolean(finalization.data?.scores_finalized_at);
     setBonusFinalized(bonusFinalizedRef.current);
     const lockAt =
@@ -303,8 +314,14 @@ export default function Game() {
   useEffect(() => {
     load();
     const refreshPickWindow = async () => {
-      const { data } = await db.rpc("active_pick_window").single();
-      const nextWindow = data as PickWindow | null;
+      const [pickWindowResult, dailyStatusResult] = await Promise.all([
+        db.rpc("active_pick_window").single(),
+        db.rpc("today_scoring_status").single(),
+      ]);
+      const nextWindow = pickWindowResult.data as PickWindow | null;
+      setDailyScoringComplete(
+        Boolean((dailyStatusResult.data as DailyScoringStatus | null)?.completed),
+      );
       if (!nextWindow) return;
       if (nextWindow.active_week !== weekRef.current) {
         await load({ showLoading: false, hydratePicks: true });
@@ -453,6 +470,18 @@ export default function Game() {
           <h2>{locked ? "Locked" : "Open for picks"}</h2>
           <div className="muted">{total} / 100 points allocated</div>
         </div>
+      </div>
+      <div
+        className={`daily-scoring-status ${
+          dailyScoringComplete ? "daily-scoring-complete" : "daily-scoring-pending"
+        }`}
+        role="status"
+      >
+        <strong>
+          {dailyScoringComplete
+            ? "Today’s scoring is complete."
+            : "Today’s scoring has not yet been completed."}
+        </strong>
       </div>
       <div className="tabs">
         <button
@@ -608,6 +637,22 @@ export default function Game() {
       ) : tab === "weekly" || tab === "season" ? (
         <div className="panel">
           <h2>{tab === "weekly" ? "Weekly" : "Season"} leaderboard</h2>
+          {tab === "weekly" && (
+            <div
+              className={`daily-scoring-status ${
+                dailyScoringComplete
+                  ? "daily-scoring-complete"
+                  : "daily-scoring-pending"
+              }`}
+              role="status"
+            >
+              <strong>
+                {dailyScoringComplete
+                  ? "Today’s scoring is complete."
+                  : "Today’s scoring has not yet been completed."}
+              </strong>
+            </div>
+          )}
           <div
             className="leaderboard-scroll"
             tabIndex={0}
