@@ -730,3 +730,30 @@ table:has(.player-cell) td:last-child {
   background: rgba(255, 202, 5, 0.10);
   color: var(--gold);
 }
+
+/* Finalized weekly recap and personal score ledger. */
+.weekly-recap { margin: 18px 0; }
+.recap-heading, .recap-my-score {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+}
+.recap-heading h2 { margin: 5px 0 16px; }
+.recap-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px; margin: 8px 0 18px;
+}
+.recap-grid > div {
+  display: flex; flex-direction: column; gap: 5px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: #111; padding: 16px; min-width: 0;
+}
+.recap-grid span { color: var(--gold); font-size: 13px; }
+.recap-grid strong { overflow-wrap: anywhere; font-size: 19px; }
+.recap-grid small { color: #aaa; line-height: 1.4; }
+.recap-my-score { border-top: 1px solid var(--border); padding-top: 16px; }
+.recap-my-score > div { display: flex; flex-direction: column; gap: 5px; }
+.recap-breakdown { margin-top: 15px; }
+.recap-note { margin: 12px 0 0; font-size: 13px; }
+@media (max-width: 560px) {
+  .recap-grid { grid-template-columns: 1fr; }
+}

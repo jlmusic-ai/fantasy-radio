@@ -10,6 +10,7 @@ import {
   pickingWeek,
 } from "../lib/game";
 import Avatar from "./avatar";
+import WeeklyRecap from "./weekly-recap";
 type Category = {
   id: string;
   name: string;
@@ -18,7 +19,8 @@ type Category = {
   display_order: number;
 };
 type Pick = { category_id: string; points: number };
-type WeeklyBreakdown = { picks: Pick[]; guess: number | null };
+type FrozenLine = { category_id: string; topic_name: string; scoring_type: string; allocated_points: number; occurrences: number; earned: number; guess: number | null };
+type WeeklyBreakdown = { picks: Pick[]; guess: number | null; frozen?: FrozenLine[] };
 type PlayerProfile = {
   id: string;
   username: string;
@@ -406,6 +408,16 @@ export default function Game() {
     setWeeklyBreakdown(null);
     setBreakdownError("");
     setBreakdownLoading(true);
+    if (bonusFinalized) {
+      const snapshot = await db.from("weekly_score_details")
+        .select("category_id,topic_name,scoring_type,allocated_points,occurrences,earned,guess")
+        .eq("week_id", week).eq("user_id", playerId);
+      if (requestId !== breakdownRequestRef.current) return;
+      if (snapshot.error) setBreakdownError("Unable to load this lineup right now.");
+      else setWeeklyBreakdown({ picks: [], guess: null, frozen: (snapshot.data || []) as FrozenLine[] });
+      setBreakdownLoading(false);
+      return;
+    }
     const [savedPicks, savedGuess] = await Promise.all([
       db.from("picks").select("category_id,points")
         .eq("week_id", week).eq("user_id", playerId),
@@ -483,6 +495,7 @@ export default function Game() {
             : "Today’s scoring has not yet been completed."}
         </strong>
       </div>
+      <WeeklyRecap userId={user} finalized={bonusFinalized} />
       <div className="tabs">
         <button
           className={tab === "picks" ? "active" : ""}
@@ -739,12 +752,17 @@ export default function Game() {
               {breakdownLoading ? <p>Loading lineup…</p> : breakdownError ? (
                 <p className="error">{breakdownError}</p>
               ) : weeklyBreakdown ? (
-                weeklyBreakdown.picks.length === 0 ? <p>No lineup submitted for this week.</p> : (
+                weeklyBreakdown.picks.length === 0 && !weeklyBreakdown.frozen?.length ? <p>No lineup submitted for this week.</p> : (
                   <>
                     <div className="weekly-breakdown-header muted">
                       <span>Topic</span><span>Allocated</span><span>Occurrences</span><span>Earned</span>
                     </div>
-                    {weeklyBreakdown.picks.map((pick) => {
+                    {weeklyBreakdown.frozen ? weeklyBreakdown.frozen.filter((line) => line.scoring_type === "allocation").map((line) => (
+                      <div className="weekly-breakdown-row" key={line.category_id}>
+                        <strong>{line.topic_name}</strong><span>{line.allocated_points}</span>
+                        <span>{line.occurrences}</span><strong>{line.earned}</strong>
+                      </div>
+                    )) : weeklyBreakdown.picks.map((pick) => {
                       const topic = categories.find((c) => c.id === pick.category_id);
                       const count = events[pick.category_id] || 0;
                       return (
@@ -755,7 +773,13 @@ export default function Game() {
                         </div>
                       );
                     })}
-                    {birthdayCategory && (
+                    {weeklyBreakdown.frozen?.filter((line) => line.scoring_type === "closest_guess").map((line) => (
+                      <div className="weekly-breakdown-row" key={line.category_id}>
+                        <strong>Bonus: {line.topic_name}</strong><span>Guess: {line.guess}</span>
+                        <span>{line.occurrences}</span><strong>{line.earned}</strong>
+                      </div>
+                    ))}
+                    {!weeklyBreakdown.frozen && birthdayCategory && (
                       <div className="weekly-breakdown-row">
                         <strong>{birthdayCategory.name}</strong>
                         <span>Guess: {weeklyBreakdown.guess ?? "—"}</span>
