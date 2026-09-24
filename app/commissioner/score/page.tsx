@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { browserClient } from "../../../lib/supabase";
-import { formatDate, pickingWeek, weekStart } from "../../../lib/game";
+import { defaultLockAt, formatDate, pickingWeek, weekStart } from "../../../lib/game";
 
 type Category = {
   id: string;
@@ -19,6 +19,7 @@ export default function ScoreThisWeek() {
   const [saving, setSaving] = useState<string | null>(null);
   const [finalizing, setFinalizing] = useState(false);
   const [finalized, setFinalized] = useState(false);
+  const [lockAt, setLockAt] = useState<string | null>(null);
   const [dailyComplete, setDailyComplete] = useState(false);
   const [dailySaving, setDailySaving] = useState(false);
   const [dailyMessage, setDailyMessage] = useState("");
@@ -26,6 +27,10 @@ export default function ScoreThisWeek() {
   const [message, setMessage] = useState("");
   const week = weekStart(new Date(now));
   const canFinalize = pickingWeek(new Date(now)) > week;
+  const canCloseEarly = !canFinalize && now >= new Date(lockAt || defaultLockAt(week)).getTime();
+  const hasUnsavedTotals = categories.some((category) =>
+    Number(drafts[category.id]) !== (totals[category.id] || 0),
+  );
 
   async function load() {
     const {
@@ -41,7 +46,7 @@ export default function ScoreThisWeek() {
     if (!profile?.is_commissioner) return;
     setAllowed(true);
 
-    const [categoryResult, eventResult, finalizationResult, dailyStatusResult] = await Promise.all([
+    const [categoryResult, eventResult, finalizationResult, dailyStatusResult, weekResult] = await Promise.all([
       db
         .from("categories")
         .select("id,name,display_order")
@@ -55,6 +60,7 @@ export default function ScoreThisWeek() {
       db.from("finalized_weeks").select("scores_finalized_at")
         .eq("week_id", week).maybeSingle(),
       db.rpc("today_scoring_status").single(),
+      db.from("weeks").select("lock_at").eq("id", week).maybeSingle(),
     ]);
 
     const nextCategories = (categoryResult.data || []) as Category[];
@@ -65,6 +71,7 @@ export default function ScoreThisWeek() {
     });
     setCategories(nextCategories);
     setFinalized(Boolean(finalizationResult.data?.scores_finalized_at));
+    setLockAt(weekResult.data?.lock_at || null);
     setDailyComplete(
       Boolean((dailyStatusResult.data as { completed?: boolean } | null)?.completed),
     );
@@ -154,12 +161,18 @@ export default function ScoreThisWeek() {
     );
   }
 
-  async function finalizeScores() {
-    if (!canFinalize || finalized || finalizing || saving) return;
-    if (!window.confirm("Finalize this week’s scores and award the birthday bonus? You won’t be able to edit these totals afterward.")) return;
+  async function finalizeScores(early = false) {
+    if (!(early ? canCloseEarly : canFinalize) || finalized || finalizing || saving || hasUnsavedTotals) return;
+    const warning = early
+      ? "Close this broadcast week early and award birthday bonuses now? All occurrence totals and weekly scores will be frozen. You cannot undo this. Next week’s picks will still open Friday at 5:00 p.m. Eastern."
+      : "Finalize this week’s scores and award the birthday bonus? You won’t be able to edit these totals afterward.";
+    if (!window.confirm(warning)) return;
     setFinalizing(true);
     setMessage("");
-    const { data, error } = await db.rpc("finalize_week_scores", { p_week: week });
+    const { data, error } = await db.rpc(
+      early ? "finalize_week_scores_early" : "finalize_week_scores",
+      { p_week: week },
+    );
     setFinalizing(false);
     if (error) {
       setMessage(error.message);
@@ -167,7 +180,7 @@ export default function ScoreThisWeek() {
       return;
     }
     setFinalized(true);
-    setMessage(`Scores finalized for ${Number(data)} ${Number(data) === 1 ? "player" : "players"}. Birthday bonuses have been awarded.`);
+    setMessage(`Scores finalized${early ? " early" : ""} for ${Number(data)} ${Number(data) === 1 ? "player" : "players"}. Birthday bonuses have been awarded.`);
   }
 
   if (!allowed) {
@@ -195,22 +208,26 @@ export default function ScoreThisWeek() {
         </p>
         <div
           className={`daily-scoring-status ${
-            dailyComplete ? "daily-scoring-complete" : "daily-scoring-pending"
+            finalized || dailyComplete ? "daily-scoring-complete" : "daily-scoring-pending"
           }`}
           role="status"
         >
           <strong>
-            {dailyComplete
+            {finalized
+              ? "This week’s scores are final."
+              : dailyComplete
               ? "Today’s scoring is complete."
               : "Today’s scoring has not yet been completed."}
           </strong>
         </div>
         <button
           type="button"
-          disabled={dailySaving}
+          disabled={dailySaving || finalized}
           onClick={() => void toggleDailyScoring()}
         >
-          {dailySaving
+          {finalized
+            ? "Week finalized"
+            : dailySaving
             ? "Updating…"
             : dailyComplete
               ? "Undo: mark today incomplete"
@@ -274,22 +291,33 @@ export default function ScoreThisWeek() {
       <section className="panel">
         <h2>Finalize scores</h2>
         <p className="muted">
-          After Friday at 5:00 p.m. Eastern, check every occurrence total and
-          finalize the week to award the birthday bonus. An exact guess earns
+          Check every occurrence total before finalizing to award the birthday bonus.
+          You can close a short broadcast week early after Monday&apos;s picks lock.
+          An exact guess earns
           50 points; each number away earns two fewer, with a minimum of five.
           Scores and occurrence totals cannot be changed after finalization.
         </p>
         {finalized ? (
           <p className="success">This week’s scores are finalized. Birthday bonuses are included.</p>
         ) : (
-          <button type="button" disabled={!canFinalize || finalizing || Boolean(saving)}
-            onClick={() => void finalizeScores()}>
-            {finalizing ? "Finalizing…" : "Finalize scores and award birthday bonus"}
-          </button>
+          <div className="score-finalize-actions">
+            <button type="button" disabled={!canFinalize || finalizing || Boolean(saving) || hasUnsavedTotals}
+              onClick={() => void finalizeScores()}>
+              {finalizing ? "Finalizing…" : "Finalize scores and award birthday bonus"}
+            </button>
+            {!canFinalize && (
+              <button type="button" className="secondary-button"
+                disabled={!canCloseEarly || finalizing || Boolean(saving) || hasUnsavedTotals}
+                onClick={() => void finalizeScores(true)}>
+                {finalizing ? "Closing week…" : "Close this week early and award bonus"}
+              </button>
+            )}
+          </div>
         )}
         {!canFinalize && !finalized && (
-          <p className="muted">Available Friday at 5:00 p.m. Eastern.</p>
+          <p className="muted">Normal finalization is available Friday at 5:00 p.m. Eastern. Early closing freezes this week’s scores now; next week’s picks still open Friday at 5:00 p.m.</p>
         )}
+        {hasUnsavedTotals && !finalized && <p className="muted">Save your edited occurrence totals before closing the week.</p>}
       </section>
       {message && (
         <p className={message === "Score updated." || message.startsWith("Scores finalized") ? "success" : "error"}>

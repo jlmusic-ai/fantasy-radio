@@ -527,26 +527,14 @@ before delete on public.categories
 for each row
 execute function private.archive_category_instead_of_delete();
 
--- Commissioner awards birthday bonuses once the broadcast week ends.
-create or replace function public.finalize_week_scores(p_week date)
+-- Commissioner finalizes scores normally or uses the early override after picks lock.
+-- Both normal and early finalization use one atomic snapshot path.
+create or replace function private.complete_week_scores(p_week date)
 returns integer language plpgsql security definer set search_path=''
 as $function$
 declare
-  current_monday date;
   awarded integer;
 begin
-  if (select auth.uid()) is null or not public.is_commissioner() then
-    raise exception 'Commissioner access required' using errcode='42501';
-  end if;
-  current_monday:=(now() at time zone 'America/New_York')::date
-    -(extract(isodow from now() at time zone 'America/New_York')::integer-1);
-  if p_week<>current_monday then
-    raise exception 'Only the current broadcast week can be finalized';
-  end if;
-  if now()<(((p_week+4)::timestamp+interval '17 hours')
-      at time zone 'America/New_York') then
-    raise exception 'Finalize after Friday at 5:00 p.m. Eastern';
-  end if;
   perform pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtext('mooberball_finalize_closed_weeks')
   );
@@ -570,8 +558,65 @@ begin
   return awarded;
 end
 $function$;
+revoke all on function private.complete_week_scores(date) from public,anon,authenticated;
+
+create or replace function public.finalize_week_scores(p_week date)
+returns integer language plpgsql security definer set search_path=''
+as $function$
+declare
+  current_monday date;
+begin
+  if (select auth.uid()) is null or not public.is_commissioner() then
+    raise exception 'Commissioner access required' using errcode='42501';
+  end if;
+  current_monday:=(now() at time zone 'America/New_York')::date
+    -(extract(isodow from now() at time zone 'America/New_York')::integer-1);
+  if p_week<>current_monday then
+    raise exception 'Only the current broadcast week can be finalized';
+  end if;
+  if now()<(((p_week+4)::timestamp+interval '17 hours')
+      at time zone 'America/New_York') then
+    raise exception 'Finalize after Friday at 5:00 p.m. Eastern';
+  end if;
+  return private.complete_week_scores(p_week);
+end
+$function$;
 revoke all on function public.finalize_week_scores(date) from public,anon;
 grant execute on function public.finalize_week_scores(date) to authenticated;
+
+-- Explicit override: only the current broadcast week, after its lineup locks.
+-- The next picking week still opens on Friday at 5 p.m. Eastern.
+create or replace function public.finalize_week_scores_early(p_week date)
+returns integer language plpgsql security definer set search_path=''
+as $function$
+declare
+  current_monday date;
+  lineup_lock timestamptz;
+begin
+  if (select auth.uid()) is null or not public.is_commissioner() then
+    raise exception 'Commissioner access required' using errcode='42501';
+  end if;
+  current_monday:=(now() at time zone 'America/New_York')::date
+    -(extract(isodow from now() at time zone 'America/New_York')::integer-1);
+  if p_week<>current_monday then
+    raise exception 'Only the current broadcast week can be finalized';
+  end if;
+  select lock_at into lineup_lock from public.weeks where id=p_week;
+  if lineup_lock is null then
+    raise exception 'This week has no scores to finalize';
+  end if;
+  if now()<lineup_lock then
+    raise exception 'Wait until this week’s picks are locked';
+  end if;
+  if now()>=(((p_week+4)::timestamp+interval '17 hours')
+      at time zone 'America/New_York') then
+    raise exception 'Use regular finalization after Friday at 5:00 p.m. Eastern';
+  end if;
+  return private.complete_week_scores(p_week);
+end
+$function$;
+revoke all on function public.finalize_week_scores_early(date) from public,anon;
+grant execute on function public.finalize_week_scores_early(date) to authenticated;
 
 create or replace function private.prevent_finalized_event_edits()
 returns trigger language plpgsql security definer set search_path=''

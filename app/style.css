@@ -732,6 +732,7 @@ table:has(.player-cell) td:last-child {
 }
 
 /* Finalized weekly recap and personal score ledger. */
+.score-finalize-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .weekly-recap { margin: 18px 0; }
 .recap-heading, .recap-my-score {
   display: flex; align-items: center; justify-content: space-between;

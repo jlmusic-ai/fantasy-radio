@@ -485,12 +485,14 @@ export default function Game() {
       </div>
       <div
         className={`daily-scoring-status ${
-          dailyScoringComplete ? "daily-scoring-complete" : "daily-scoring-pending"
+          bonusFinalized || dailyScoringComplete ? "daily-scoring-complete" : "daily-scoring-pending"
         }`}
         role="status"
       >
         <strong>
-          {dailyScoringComplete
+          {bonusFinalized
+            ? "This week’s scores are final, including the birthday bonus."
+            : dailyScoringComplete
             ? "Today’s scoring is complete."
             : "Today’s scoring has not yet been completed."}
         </strong>
