@@ -674,7 +674,9 @@ export default function Game() {
             <tbody>
               {(tab === "weekly" ? leaders : seasonLeaders).map((p, i) => (
                 <tr key={p.user_id}>
-                  <td>{i + 1}</td>
+                  <td>{tab === "weekly" && bonusFinalized
+                    ? leaders.findIndex((player) => player.score === p.score) + 1
+                    : i + 1}</td>
                   <td>
                     <span className="player-cell">
                       <Avatar name={p.username} url={p.avatar_url} size={34} />

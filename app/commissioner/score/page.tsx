@@ -169,18 +169,24 @@ export default function ScoreThisWeek() {
     if (!window.confirm(warning)) return;
     setFinalizing(true);
     setMessage("");
-    const { data, error } = await db.rpc(
-      early ? "finalize_week_scores_early" : "finalize_week_scores",
-      { p_week: week },
-    );
-    setFinalizing(false);
-    if (error) {
-      setMessage(error.message);
+    let result: { finalized?: boolean; players?: number; emailed?: number; deliveryPending?: boolean; error?: string };
+    try {
+      const response = await fetch("/api/commissioner/finalize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ week, early }),
+      });
+      result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to finalize scores");
+    } catch (error) {
+      setFinalizing(false);
+      setMessage(error instanceof Error ? error.message : "Unable to finalize scores");
       await load();
       return;
     }
+    setFinalizing(false);
     setFinalized(true);
-    setMessage(`Scores finalized${early ? " early" : ""} for ${Number(data)} ${Number(data) === 1 ? "player" : "players"}. Birthday bonuses have been awarded.`);
+    setMessage(`Scores finalized${early ? " early" : ""} for ${result.players} ${result.players === 1 ? "player" : "players"}. Birthday bonuses have been awarded. ${result.deliveryPending ? "Results emails are queued for another delivery attempt." : `Results emails sent to ${result.emailed} players.`}`);
   }
 
   if (!allowed) {
