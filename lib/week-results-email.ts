@@ -79,7 +79,7 @@ export async function dispatchWeekResults(week: string, maxBatches = 8) {
     const claim = await supabaseRequest("/rest/v1/rpc/claim_week_result_emails", secret, {
       method: "POST", body: JSON.stringify({ p_week: week, p_limit: 100 }),
     });
-    if (!claim.ok) throw new Error("Unable to reserve results emails");
+    if (!claim.ok) throw new Error(`Unable to reserve results emails (HTTP ${claim.status}, ${claim.headers.get("sb-error-code") || "unknown"})`);
     const rows = (await claim.json()) as Recipient[];
     if (!rows.length) break;
     const recipients = rows.filter((row) => Boolean(row.email));
@@ -88,7 +88,7 @@ export async function dispatchWeekResults(week: string, maxBatches = 8) {
       const response = await supabaseRequest("/rest/v1/rpc/complete_week_result_emails", secret, {
         method: "POST", body: JSON.stringify({ p_week: week, p_user_ids: userIds, p_sent: delivered }),
       });
-      if (!response.ok) throw new Error("Unable to record results email delivery");
+      if (!response.ok) throw new Error(`Unable to record results email delivery (HTTP ${response.status})`);
     };
 
     if (recipients.length) {
@@ -114,7 +114,7 @@ export async function dispatchWeekResults(week: string, maxBatches = 8) {
       }
       if (!response.ok) {
         await acknowledge(ids, false);
-        throw new Error("Results email provider did not accept the batch");
+        throw new Error(`Results email provider did not accept the batch (HTTP ${response.status})`);
       }
       const receipt = (await response.json()) as { data?: { id: string }[] };
       if (receipt.data?.length !== recipients.length) {
@@ -137,7 +137,7 @@ export async function pendingResultWeeks() {
     "/rest/v1/week_result_email_sends?select=week_id&status=in.(pending,processing)&order=week_id.desc&limit=1000",
     secret,
   );
-  if (!response.ok) throw new Error("Unable to load pending results emails");
+  if (!response.ok) throw new Error(`Unable to load pending results emails (HTTP ${response.status}, ${response.headers.get("sb-error-code") || "unknown"})`);
   const rows = (await response.json()) as { week_id: string }[];
   return [...new Set(rows.map((row) => row.week_id))];
 }

@@ -24,7 +24,8 @@ export async function POST(request: Request) {
   try {
     const emailed = await dispatchWeekResults(body.week);
     return Response.json({ finalized: true, players: Number(data), emailed });
-  } catch {
+  } catch (error) {
+    console.error("Results email delivery failed:", error);
     // The database queue remains pending; the daily retry job picks it up.
     return Response.json({ finalized: true, players: Number(data), deliveryPending: true });
   }

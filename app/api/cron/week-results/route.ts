@@ -16,7 +16,8 @@ export async function GET(request: Request) {
       sent += await dispatchWeekResults(week, 6);
     }
     return Response.json({ success: true, sent, weeksChecked: Math.min(weeks.length, 3) });
-  } catch {
+  } catch (error) {
+    console.error("Results email retry failed:", error);
     return Response.json({ error: "Unable to deliver pending results emails" }, { status: 502 });
   }
 }
