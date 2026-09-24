@@ -736,6 +736,30 @@ table:has(.player-cell) td:last-child {
   color: var(--gold);
 }
 
+.scoring-history-heading { align-items: flex-start; flex-wrap: wrap; }
+.scoring-history-heading p { margin: 0 0 12px; }
+.scoring-history-heading label { min-width: min(100%, 240px); }
+.scoring-history-heading select { margin-bottom: 0; }
+.scoring-day {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #111;
+}
+.scoring-day-heading { flex-wrap: wrap; }
+.scoring-day-heading h3 { margin: 0; color: var(--gold); }
+.scoring-day-complete { color: #80dfac; font-size: 13px; font-weight: 700; }
+.scoring-day-line { padding: 12px 0; border-top: 1px solid var(--border); }
+.scoring-day-heading + .scoring-day-line { margin-top: 14px; }
+.scoring-day-line span { min-width: 0; overflow-wrap: anywhere; }
+.scoring-day-line strong { flex-shrink: 0; white-space: nowrap; }
+.scoring-history-note { margin-bottom: 0; }
+@media (max-width: 560px) {
+  .scoring-day-line { align-items: flex-start; }
+  .scoring-day-line strong { font-size: 13px; }
+}
+
 /* Finalized weekly recap and personal score ledger. */
 .score-finalize-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .weekly-recap { margin: 18px 0; }

@@ -26,6 +26,9 @@ export default function ScoreThisWeek() {
   const [now, setNow] = useState(Date.now());
   const [message, setMessage] = useState("");
   const week = weekStart(new Date(now));
+  const easternDay = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date(now));
   const canFinalize = pickingWeek(new Date(now)) > week;
   const canCloseEarly = !canFinalize && now >= new Date(lockAt || defaultLockAt(week)).getTime();
   const hasUnsavedTotals = categories.some((category) =>
@@ -90,13 +93,13 @@ export default function ScoreThisWeek() {
     void load();
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(timer);
-  }, [week]);
+  }, [week, easternDay]);
 
   async function updateTotal(
     categoryId: string,
     change: { delta: number } | { target: number },
   ) {
-    if (finalized || finalizing) return;
+    if (finalized || finalizing || dailyComplete) return;
     setSaving(categoryId);
     setMessage("");
     const { data, error } = await db.rpc("adjust_weekly_occurrences", {
@@ -124,7 +127,7 @@ export default function ScoreThisWeek() {
   }
 
   function saveDraft(categoryId: string) {
-    if (finalized || finalizing) return;
+    if (finalized || finalizing || dailyComplete) return;
     const value = Number(drafts[categoryId]);
     if (!Number.isInteger(value) || value < 0 || value > 5000) {
       setMessage("Enter a whole number between 0 and 5000.");
@@ -203,13 +206,15 @@ export default function ScoreThisWeek() {
       <h1>Score this week</h1>
       <p className="muted">
         Week beginning {formatDate(week)}. Tap plus or minus as moments happen,
-        or enter the weekly total directly.
+        or enter the weekly total directly. Changes are recorded for today;
+        completed days keep their own counts.
       </p>
       <section className="panel">
         <h2>Today’s scoring status</h2>
         <p className="muted">
           Mark today complete after you have finished scoring the podcast.
-          You can undo this if you need to make a correction. A new day
+          The completed day and its topic counts appear in the scoring log.
+          Undo completion before making a correction. A new day
           automatically starts as incomplete at midnight Eastern.
         </p>
         <div
@@ -255,7 +260,7 @@ export default function ScoreThisWeek() {
                 className="score-step"
                 type="button"
                 aria-label={`Subtract one from ${category.name}`}
-                disabled={busy || finalizing || finalized || (totals[category.id] || 0) === 0}
+                disabled={busy || finalizing || finalized || dailyComplete || (totals[category.id] || 0) === 0}
                 onClick={() => updateTotal(category.id, { delta: -1 })}
               >
                 −
@@ -269,7 +274,7 @@ export default function ScoreThisWeek() {
                 max="5000"
                 step="1"
                 value={drafts[category.id] ?? "0"}
-                disabled={busy || finalizing || finalized}
+                disabled={busy || finalizing || finalized || dailyComplete}
                 onChange={(event) =>
                   setDrafts((current) => ({
                     ...current,
@@ -285,7 +290,7 @@ export default function ScoreThisWeek() {
                 className="score-step"
                 type="button"
                 aria-label={`Add one to ${category.name}`}
-                disabled={busy || finalizing || finalized}
+                disabled={busy || finalizing || finalized || dailyComplete}
                 onClick={() => updateTotal(category.id, { delta: 1 })}
               >
                 +

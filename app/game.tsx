@@ -11,6 +11,7 @@ import {
 } from "../lib/game";
 import Avatar from "./avatar";
 import WeeklyRecap from "./weekly-recap";
+import ScoringLog from "./scoring-log";
 type Category = {
   id: string;
   name: string;
@@ -843,30 +844,7 @@ export default function Game() {
               </section>
             )}
         </div>
-      ) : (
-        <div className="panel">
-          <h2>Verified occurrences this week</h2>
-          {allocationCategories.map((c) => (
-            <div className="row" key={c.id}>
-              <p>{c.name}</p>
-              <strong>{events[c.id] || 0}</strong>
-            </div>
-          ))}
-          {birthdayCategory && (
-            <div className="row scoring-log-bonus">
-              <div>
-                <p><strong>Bonus: {birthdayCategory.name}</strong></p>
-                <span className="muted">
-                  {bonusFinalized
-                    ? "Final count used to award birthday bonus points"
-                    : "Bonus points pending until weekly scores are finalized"}
-                </span>
-              </div>
-              <strong>{events[birthdayCategory.id] || 0}</strong>
-            </div>
-          )}
-        </div>
-      )}
+      ) : <ScoringLog currentWeek={week} />}
     </>
   );
 }
