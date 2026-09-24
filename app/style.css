@@ -186,6 +186,11 @@ label {
 .topic-actions button:last-child {
   margin-left: auto;
 }
+.topic-actions .remove-topic-button {
+  background: transparent;
+  border: 1px solid #bb6b6b;
+  color: #ffb4b4;
+}
 .date-picker {
   display: flex;
   align-items: stretch;

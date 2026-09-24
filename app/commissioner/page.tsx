@@ -85,7 +85,9 @@ export default function Commissioner() {
     [topicMsg, setTopicMsg] = useState(""),
     [newTopicName, setNewTopicName] = useState(""),
     [addingTopic, setAddingTopic] = useState(false),
+    [removingTopic, setRemovingTopic] = useState<string | null>(null),
     [lock, setLock] = useState(`${pickingWeek(new Date())}T06:00`);
+  const pointTopicCount = categories.filter((topic) => topic.scoring_type === "allocation").length;
   async function load() {
     const {
       data: { user },
@@ -198,6 +200,17 @@ export default function Commissioner() {
     setTopicMsg("New weekly lineup topic added.");
     await load();
   }
+  async function removeTopic(item: Category) {
+    if (removingTopic || !window.confirm(
+      `Remove “${item.name}” from future lineups and the Rules page bubbles? Previously earned points will remain unchanged.`,
+    )) return;
+    setRemovingTopic(item.id);
+    setTopicMsg("");
+    const { error } = await db.rpc("retire_lineup_topic", { p_topic_id: item.id });
+    setRemovingTopic(null);
+    setTopicMsg(error ? error.message : `“${item.name}” was removed from future lineups.`);
+    if (!error) await load();
+  }
   async function moveTopic(index: number, direction: -1 | 1) {
     const destination = index + direction;
     if (destination < 0 || destination >= categories.length) return;
@@ -273,7 +286,8 @@ export default function Commissioner() {
       <div className="panel">
         <h2>Weekly lineup topics</h2>
         <p className="muted">
-          Add, edit, and reorder the topics players see in their weekly lineup.
+          Add, edit, reorder, or remove topics from future lineups. Removing a
+          topic keeps its previous scores and removes it from the Rules page bubbles.
         </p>
         <div className="topic-editor">
           <h3>Add a new topic</h3>
@@ -306,19 +320,35 @@ export default function Commissioner() {
             </label>
             <div className="topic-actions">
               <button
-                disabled={index === 0}
+                disabled={index === 0 || Boolean(removingTopic)}
                 onClick={() => moveTopic(index, -1)}
               >
                 ↑ Move up
               </button>
               <button
-                disabled={index === categories.length - 1}
+                disabled={index === categories.length - 1 || Boolean(removingTopic)}
                 onClick={() => moveTopic(index, 1)}
               >
                 ↓ Move down
               </button>
-              <button onClick={() => saveTopic(item)}>Save topic</button>
+              <button
+                type="button"
+                className="remove-topic-button"
+                disabled={Boolean(removingTopic) || item.scoring_type !== "allocation" || pointTopicCount <= 4}
+                title={item.scoring_type !== "allocation"
+                  ? "The birthday bonus is a built-in rule"
+                  : pointTopicCount <= 4
+                    ? "At least four point topics are required for a 100-point lineup"
+                    : undefined}
+                onClick={() => void removeTopic(item)}
+              >
+                {removingTopic === item.id ? "Removing…" : "Remove topic"}
+              </button>
+              <button disabled={Boolean(removingTopic)} onClick={() => saveTopic(item)}>Save topic</button>
             </div>
+            {item.scoring_type !== "allocation" && (
+              <p className="muted">The birthday bonus is a built-in game rule and cannot be removed here.</p>
+            )}
           </div>
         ))}
       </div>

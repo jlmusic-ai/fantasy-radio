@@ -1,12 +1,5 @@
 import { serverClient } from "../lib/server";
 
-const fallbackTopics = [
-  "A Florida story involving nudity",
-  "Something or someone sent to Tha' Crossroads",
-  "Over 15 Mike McCarthy Meows in One Interview Clip",
-  "🎂 Bob's Birthday Wishes 🎂",
-];
-
 function pickRandomTopics(topics: string[], count: number) {
   const shuffled = [...topics];
 
@@ -28,11 +21,7 @@ export default async function RulesContent() {
     .select("name")
     .eq("active", true)
     .order("display_order");
-  const availableTopics =
-    data && data.length >= 4
-      ? data.map((topic) => topic.name)
-      : fallbackTopics;
-  const topics = pickRandomTopics(availableTopics, 4);
+  const topics = pickRandomTopics((data || []).map((topic) => topic.name), 4);
 
   return (
     <>
