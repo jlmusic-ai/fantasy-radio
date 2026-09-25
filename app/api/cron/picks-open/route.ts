@@ -45,10 +45,16 @@ export async function GET(request: Request) {
   if (!secret || !resendKey || !from) return Response.json({ error: "Email service is not configured" }, { status: 503 });
 
   const parts = easternParts(new Date());
-  if (parts.weekday !== "Fri" || parts.hour < 17 || parts.hour > 18)
-    return Response.json({ skipped: true, reason: "Outside Friday opening window" });
+  if (parts.weekday !== "Fri" || parts.hour < 19 || parts.hour > 20)
+    return Response.json({ skipped: true, reason: "Outside Friday evening reminder window" });
   const week = upcomingMonday(parts);
-  const optedOut = await optedOutUsers(secret);
+  const [optedOut, completeResponse] = await Promise.all([
+    optedOutUsers(secret),
+    emailDatabase(`/rest/v1/weekly_lineup_status?week_id=eq.${week}&allocated_points=eq.100&select=user_id`, secret),
+  ]);
+  if (!completeResponse.ok) return Response.json({ error: "Unable to check lineup status" }, { status: 502 });
+  const completeRows = (await completeResponse.json()) as { user_id: string }[];
+  const completeUsers = new Set(completeRows.map((row) => row.user_id));
   let sent = 0;
   let eligible = 0;
   for (let page = 1; page <= 100; page++) {
@@ -57,7 +63,7 @@ export async function GET(request: Request) {
     const payload = (await usersResponse.json()) as { users?: AuthUser[] };
     const users = payload.users || [];
     const recipients = users.filter((user): user is AuthUser & { email: string } =>
-      Boolean(user.email && user.email_confirmed_at) && !optedOut.has(user.id));
+      Boolean(user.email && user.email_confirmed_at) && !optedOut.has(user.id) && !completeUsers.has(user.id));
     eligible += recipients.length;
     if (recipients.length) {
       const claim = await emailDatabase("/rest/v1/pick_open_email_sends?on_conflict=week_id,user_id", secret, {
