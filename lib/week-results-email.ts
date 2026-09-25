@@ -51,6 +51,7 @@ function resultHtml(week: string, recipient: Recipient) {
         <p style="margin:22px 0;color:#e2e2e2;font-size:16px;line-height:1.5;">See the weekly leaderboard and how your points were earned on Mooberball.</p>
         <a href="${SITE_URL}/" style="display:inline-block;padding:14px 20px;border-radius:9px;background:#ffca05;color:#151515;font-size:16px;font-weight:800;text-decoration:none;">See final scores</a>
         <p style="margin:24px 0 0;color:#999999;font-size:12px;line-height:1.5;">Mooberball is an independent fan-made game.</p>
+        ${unsubscribeFooter(unsubscribeUrl(recipient.user_id))}
       </div>
     </div>
   </body>
@@ -82,7 +83,8 @@ export async function dispatchWeekResults(week: string, maxBatches = 8) {
     if (!claim.ok) throw new Error(`Unable to reserve results emails (HTTP ${claim.status}, ${claim.headers.get("sb-error-code") || "unknown"})`);
     const rows = (await claim.json()) as Recipient[];
     if (!rows.length) break;
-    const recipients = rows.filter((row) => Boolean(row.email));
+    const optedOut = await optedOutUsers(secret);
+    const recipients = rows.filter((row) => Boolean(row.email) && !optedOut.has(row.user_id));
     const ids = rows.map((row) => row.user_id);
     const acknowledge = async (userIds: string[], delivered: boolean) => {
       const response = await supabaseRequest("/rest/v1/rpc/complete_week_result_emails", secret, {
@@ -103,7 +105,8 @@ export async function dispatchWeekResults(week: string, maxBatches = 8) {
           from, to: [recipient.email],
           subject: `Mooberball ${weekLabel(week)} Results: ${ordinal(recipient.place)} Place`,
           html: resultHtml(week, recipient),
-          text: `Howdy Moober! ${recipient.username}, the scores are final. You finished ${recipient.tied ? "tied for " : ""}${ordinal(recipient.place)} place with ${recipient.score} ${recipient.score === 1 ? "point" : "points"}. See final scores: ${SITE_URL}/`,
+          text: `Howdy Moober! ${recipient.username}, the scores are final. You finished ${recipient.tied ? "tied for " : ""}${ordinal(recipient.place)} place with ${recipient.score} ${recipient.score === 1 ? "point" : "points"}. See final scores: ${SITE_URL}/\n\nUnsubscribe from all Mooberball emails: ${unsubscribeUrl(recipient.user_id)}`,
+          headers: { "List-Unsubscribe": `<${unsubscribeUrl(recipient.user_id)}>` },
         }))),
       };
       let response = await fetch("https://api.resend.com/emails/batch", emailRequest);
@@ -124,7 +127,7 @@ export async function dispatchWeekResults(week: string, maxBatches = 8) {
       await acknowledge(recipients.map((row) => row.user_id), true);
       sent += recipients.length;
     }
-    const missing = rows.filter((row) => !row.email).map((row) => row.user_id);
+    const missing = rows.filter((row) => !row.email || optedOut.has(row.user_id)).map((row) => row.user_id);
     if (missing.length) await acknowledge(missing, true);
   }
   return sent;
@@ -141,3 +144,4 @@ export async function pendingResultWeeks() {
   const rows = (await response.json()) as { week_id: string }[];
   return [...new Set(rows.map((row) => row.week_id))];
 }
+import { optedOutUsers, unsubscribeFooter, unsubscribeUrl } from "./email-unsubscribe";

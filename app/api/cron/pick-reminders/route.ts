@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+import { optedOutUsers, unsubscribeFooter, unsubscribeUrl } from "../../../../lib/email-unsubscribe";
 
 type AuthUser = {
   id: string;
@@ -50,7 +51,7 @@ function seasonWeekNumber(weekId: string) {
   return Math.floor((week - start) / 604_800_000) + 1;
 }
 
-function reminderHtml() {
+function reminderHtml(unsubscribe: string) {
   return `<!doctype html>
 <html>
   <body style="margin:0;background:#050505;color:#ffffff;font-family:Arial,Helvetica,sans-serif;">
@@ -62,6 +63,7 @@ function reminderHtml() {
         <p style="margin:0 0 24px;color:#e2e2e2;font-size:19px;line-height:1.6;">Don’t forget to lock in your picks for this week.</p>
         <a href="${SITE_URL}/" style="display:inline-block;padding:14px 20px;border-radius:9px;background:#ffca05;color:#151515;font-size:16px;font-weight:800;text-decoration:none;">Lock in your picks</a>
         <p style="margin:24px 0 0;color:#999999;font-size:12px;line-height:1.5;">Picks lock Monday at 6:00 a.m. Eastern Time.</p>
+        ${unsubscribeFooter(unsubscribe)}
       </div>
     </div>
   </body>
@@ -149,12 +151,14 @@ export async function GET(request: Request) {
   }
 
   const usersPayload = (await usersResponse.json()) as { users?: AuthUser[] };
+  const optedOut = await optedOutUsers(supabaseSecret);
   const completeRows = (await completeResponse.json()) as { user_id: string }[];
   const completeUsers = new Set(completeRows.map((row) => row.user_id));
   const recipients = (usersPayload.users || [])
     .filter(
       (user): user is AuthUser & { email: string } =>
         Boolean(user.email && user.email_confirmed_at) &&
+        !optedOut.has(user.id) &&
         !completeUsers.has(user.id),
     )
     .map((user) => ({ id: user.id, email: user.email }));
@@ -204,8 +208,9 @@ export async function GET(request: Request) {
           from,
           to: [recipient.email],
           subject: `Mooberball Week ${weekNumber}, Lock In Your Picks!`,
-          html: reminderHtml(),
-          text: `Howdy Moober! Don’t forget to lock in your picks for this week: ${SITE_URL}/\n\nPicks lock Monday at 6:00 a.m. Eastern Time.`,
+          html: reminderHtml(unsubscribeUrl(recipient.id)),
+          text: `Howdy Moober! Don’t forget to lock in your picks for this week: ${SITE_URL}/\n\nPicks lock Monday at 6:00 a.m. Eastern Time.\n\nUnsubscribe from all Mooberball emails: ${unsubscribeUrl(recipient.id)}`,
+          headers: { "List-Unsubscribe": `<${unsubscribeUrl(recipient.id)}>` },
         })),
       ),
     });
