@@ -90,6 +90,7 @@ export default function Game() {
       new Set(),
     ),
     [leaders, setLeaders] = useState<Score[]>([]),
+    [weeklyEligibilityError, setWeeklyEligibilityError] = useState(false),
     [seasonLeaders, setSeasonLeaders] = useState<Score[]>([]),
     [seasonStats, setSeasonStats] = useState<Record<string, SeasonStats>>({}),
     [selectedSeasonUserId, setSelectedSeasonUserId] = useState<string | null>(null),
@@ -105,6 +106,7 @@ export default function Game() {
     [tab, setTab] = useState("picks"),
     [loading, setLoading] = useState(true);
   const weekRef = useRef(week);
+  const lockedRef = useRef(locked);
   const bonusFinalizedRef = useRef(false);
   const breakdownRequestRef = useRef(0);
   const avatarCacheRef = useRef(
@@ -190,6 +192,7 @@ export default function Game() {
     const lockAt =
       pickWindowData?.closes_at || ws.data?.lock_at || defaultLockAt(w);
     const isLocked = Date.now() >= new Date(lockAt).getTime();
+    lockedRef.current = isLocked;
     setLocked(isLocked);
     if (!isLocked) {
       setSelectedWeeklyUserId(null);
@@ -202,13 +205,13 @@ export default function Game() {
         (counts[e.category_id] = (counts[e.category_id] || 0) + e.quantity),
     );
     setEvents(counts);
-    setCompletedPickUsers(
-      new Set(
-        (lineupStatus.data || [])
-          .filter((lineup) => lineup.allocated_points === 100)
-          .map((lineup) => lineup.user_id),
-      ),
+    const submittedUsers = new Set(
+      (lineupStatus.data || [])
+        .filter((lineup) => lineup.allocated_points === 100)
+        .map((lineup) => lineup.user_id),
     );
+    setCompletedPickUsers(submittedUsers);
+    setWeeklyEligibilityError(Boolean(lineupStatus.error));
     const allPlayers = (profiles.data || []) as PlayerProfile[];
     const includeZeroScores = (scoredPlayers: Score[]) => {
       if (!allPlayers.length) return scoredPlayers;
@@ -227,7 +230,8 @@ export default function Game() {
             b.score - a.score || a.username.localeCompare(b.username),
         );
     };
-    const rawLeaders = includeZeroScores((lb.data || []) as Score[]);
+    const rawLeaders = includeZeroScores((lb.data || []) as Score[])
+      .filter((player) => !isLocked || submittedUsers.has(player.user_id));
     const rawSeasonLeaders = includeZeroScores((sl.data || []) as Score[]);
     const statsByPlayer = new Map(
       ((seasonStatsRows.data || []) as SeasonStatsRow[]).map((row) => [
@@ -344,6 +348,10 @@ export default function Game() {
           return;
         }
         const isLocked = Date.now() >= new Date(nextWindow.closes_at).getTime();
+        if (isLocked !== lockedRef.current) {
+          await load({ showLoading: false, hydratePicks: false });
+          return;
+        }
         setLocked(isLocked);
         if (!isLocked) {
           setSelectedWeeklyUserId(null);
@@ -747,6 +755,12 @@ export default function Game() {
             </tbody>
             </table>
           </div>
+          {tab === "weekly" && weeklyEligibilityError && locked && (
+            <p className="error" role="alert">Unable to load submitted lineups. Please refresh the page.</p>
+          )}
+          {tab === "weekly" && !weeklyEligibilityError && locked && leaders.length === 0 && (
+            <p className="muted">No players submitted a complete lineup before picks locked.</p>
+          )}
           {tab === "weekly" && locked && selectedWeeklyPlayer && (
             <section className="season-stats-card" aria-live="polite">
               <div className="season-stats-heading">
