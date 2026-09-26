@@ -43,6 +43,20 @@ export function pickingWeek(date: Date) {
   if (afterFridayCutoff) monday.setUTCDate(monday.getUTCDate() + 7);
   return monday.toISOString().slice(0, 10);
 }
+export function isBroadcastScoringWindow(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: ZONE,
+    weekday: "short",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (kind: string) => parts.find((part) => part.type === kind)?.value;
+  const day = get("weekday");
+  const hour = Number(get("hour"));
+  return day === "Mon" ? hour >= 6
+    : day === "Fri" ? hour < 17
+    : day === "Tue" || day === "Wed" || day === "Thu";
+}
 export function defaultLockAt(week: string) {
   const local = `${week}T06:00`;
   const guess = new Date(`${local}:00Z`);

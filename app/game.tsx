@@ -7,7 +7,9 @@ import {
   FIRST_SEASON_END,
   FIRST_SEASON_START,
   formatDate,
+  isBroadcastScoringWindow,
   pickingWeek,
+  weekStart,
 } from "../lib/game";
 import Avatar from "./avatar";
 import WeeklyRecap from "./weekly-recap";
@@ -98,6 +100,7 @@ export default function Game() {
     [week, setWeek] = useState(pickingWeek(new Date())),
     [locked, setLocked] = useState(false),
     [dailyScoringComplete, setDailyScoringComplete] = useState(false),
+    [showScoringStatus, setShowScoringStatus] = useState(false),
     [message, setMessage] = useState(""),
     [tab, setTab] = useState("picks"),
     [loading, setLoading] = useState(true);
@@ -128,6 +131,8 @@ export default function Game() {
     setUser(u?.id || null);
     const pickWindowData = pickWindow.data as PickWindow | null;
     const w = pickWindowData?.active_week || pickingWeek(new Date());
+    const nowForStatus = new Date();
+    setShowScoringStatus(weekStart(nowForStatus) === w && isBroadcastScoringWindow(nowForStatus));
     const weekChanged = weekRef.current !== w;
     if (weekChanged) {
       weekRef.current = w;
@@ -317,6 +322,8 @@ export default function Game() {
   useEffect(() => {
     load();
     const refreshPickWindow = async () => {
+      const nowForStatus = new Date();
+      setShowScoringStatus(weekStart(nowForStatus) === weekRef.current && isBroadcastScoringWindow(nowForStatus));
       const [pickWindowResult, dailyStatusResult] = await Promise.all([
         db.rpc("active_pick_window").single(),
         db.rpc("today_scoring_status").single(),
@@ -484,7 +491,7 @@ export default function Game() {
           <div className="muted">{total} / 100 points allocated</div>
         </div>
       </div>
-      <div
+      {showScoringStatus && <div
         className={`daily-scoring-status ${
           bonusFinalized || dailyScoringComplete ? "daily-scoring-complete" : "daily-scoring-pending"
         }`}
@@ -497,7 +504,7 @@ export default function Game() {
             ? "Today’s scoring is complete."
             : "Today’s scoring has not yet been completed."}
         </strong>
-      </div>
+      </div>}
       <WeeklyRecap userId={user} finalized={bonusFinalized} />
       <div className="tabs">
         <button
