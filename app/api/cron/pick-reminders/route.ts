@@ -51,6 +51,13 @@ function seasonWeekNumber(weekId: string) {
   return Math.floor((week - start) / 604_800_000) + 1;
 }
 
+function reminderSubject(weekId: string) {
+  if (weekId >= FIRST_SEASON_START && weekId <= FIRST_SEASON_END) {
+    return `Mooberball Week ${seasonWeekNumber(weekId)}, Lock In Your Picks!`;
+  }
+  return `Mooberball Week of ${weekId.slice(5, 7)}-${weekId.slice(8, 10)}-${weekId.slice(0, 4)}, Lock In Your Picks!`;
+}
+
 function reminderHtml(unsubscribe: string) {
   return `<!doctype html>
 <html>
@@ -127,14 +134,6 @@ export async function GET(request: Request) {
   }
 
   const weekId = nextMonday(parts);
-  if (weekId < FIRST_SEASON_START || weekId > FIRST_SEASON_END) {
-    return Response.json({
-      skipped: true,
-      reason: "Upcoming week is outside the official season",
-      week: weekId,
-    });
-  }
-  const weekNumber = seasonWeekNumber(weekId);
   const [usersResponse, completeResponse] = await Promise.all([
     supabaseRequest("/auth/v1/admin/users?page=1&per_page=1000", supabaseSecret),
     supabaseRequest(
@@ -207,7 +206,7 @@ export async function GET(request: Request) {
         batch.map((recipient) => ({
           from,
           to: [recipient.email],
-          subject: `Mooberball Week ${weekNumber}, Lock In Your Picks!`,
+          subject: reminderSubject(weekId),
           html: reminderHtml(unsubscribeUrl(recipient.id)),
           text: `Howdy Moober! Don’t forget to lock in your picks for this week: ${SITE_URL}/\n\nPicks lock Monday at 6:00 a.m. Eastern Time.\n\nUnsubscribe from all Mooberball emails: ${unsubscribeUrl(recipient.id)}`,
           headers: { "List-Unsubscribe": `<${unsubscribeUrl(recipient.id)}>` },
