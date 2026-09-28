@@ -31,8 +31,6 @@ export default function ProfilePage() {
       setEmail(user.email || "");
       if (user.user_metadata?.welcome_photo_pending === true) {
         setWelcome(true);
-        // This is a one-time onboarding message, not an authorization flag.
-        await db.auth.updateUser({ data: { welcome_photo_pending: false } });
       }
       const { data, error } = await db
         .from("profiles")
@@ -53,6 +51,22 @@ export default function ProfilePage() {
     }
     loadProfile();
   }, []);
+
+  async function finishWelcome() {
+    const { error } = await db.auth.updateUser({ data: { welcome_photo_pending: false } });
+    if (error) {
+      setProfileMessage("We couldn't save your onboarding choice. Please try again.");
+      return false;
+    }
+    setWelcome(false);
+    return true;
+  }
+
+  async function skipPhoto() {
+    if (!await finishWelcome()) return;
+    sessionStorage.setItem(`mooberball-photo-reminder-later:${userId}`, "1");
+    window.location.href = "/";
+  }
 
   async function saveProfile(event: FormEvent) {
     event.preventDefault();
@@ -111,7 +125,7 @@ export default function ProfilePage() {
         .from("avatars")
         .createSignedUrl(path, 3600);
       setAvatarUrl(signed?.signedUrl || null);
-      setProfileMessage("Profile photo updated.");
+      if (!welcome || await finishWelcome()) setProfileMessage("Profile photo updated.");
     }
   }
 
@@ -167,6 +181,7 @@ export default function ProfilePage() {
         <div className="panel profile-welcome" role="status">
           <h2>You're in - now upload a profile photo!</h2>
           <p>Add a photo below so other Moobers can recognize you on the leaderboards.</p>
+          <button type="button" className="secondary-action" disabled={uploading} onClick={skipPhoto}>Skip for now</button>
         </div>
       )}
       <div className="profile-heading">
