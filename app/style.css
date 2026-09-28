@@ -236,6 +236,13 @@ label {
   border-color: var(--gold-dark);
   box-shadow: 0 0 24px rgba(255, 202, 5, 0.12);
 }
+.profile-welcome {
+  border-color: var(--gold-dark);
+  box-shadow: 0 0 24px rgba(255, 202, 5, 0.12);
+}
+.profile-welcome h2 {
+  color: var(--gold);
+}
 .photo-reminder h2 {
   color: var(--gold);
 }

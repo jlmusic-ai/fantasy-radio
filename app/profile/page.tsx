@@ -16,6 +16,7 @@ export default function ProfilePage() {
   const [accountMessage, setAccountMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [welcome, setWelcome] = useState(false);
 
   useEffect(() => {
     async function loadProfile() {
@@ -28,6 +29,11 @@ export default function ProfilePage() {
       }
       setUserId(user.id);
       setEmail(user.email || "");
+      if (user.user_metadata?.welcome_photo_pending === true) {
+        setWelcome(true);
+        // This is a one-time onboarding message, not an authorization flag.
+        await db.auth.updateUser({ data: { welcome_photo_pending: false } });
+      }
       const { data, error } = await db
         .from("profiles")
         .select("username,avatar_url")
@@ -157,6 +163,12 @@ export default function ProfilePage() {
 
   return (
     <>
+      {welcome && (
+        <div className="panel profile-welcome" role="status">
+          <h2>You're in - now upload a profile photo!</h2>
+          <p>Add a photo below so other Moobers can recognize you on the leaderboards.</p>
+        </div>
+      )}
       <div className="profile-heading">
         <Avatar name={username} url={avatarUrl} size={72} />
         <div>

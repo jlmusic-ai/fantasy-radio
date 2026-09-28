@@ -138,7 +138,8 @@ export default function Signup() {
       password,
       options: {
         captchaToken,
-        data: { username: cleanUsername },
+        emailRedirectTo: `${window.location.origin}/`,
+        data: { username: cleanUsername, welcome_photo_pending: true },
       },
     });
     setCaptchaResetKey((current) => current + 1);
@@ -151,11 +152,11 @@ export default function Signup() {
     if (data.session && data.user) {
       setSubmitting(false);
       setMessage("Account created!");
-      window.location.href = "/";
+      window.location.href = "/profile";
       return;
     }
     setSubmitting(false);
-    setMessage("Check your email to confirm your account, then log in. Your username can be changed after confirmation.");
+    setMessage("Check your email to confirm your account. After confirming, we'll take you to your profile to add a photo.");
   }
 
   return (
