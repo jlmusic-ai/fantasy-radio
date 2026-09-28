@@ -13,6 +13,7 @@ function formatSignupDate(iso: string) {
 
 export default function CommissionerUsersPage() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [excludedUserIds, setExcludedUserIds] = useState<Set<string> | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [message, setMessage] = useState("Loading users…");
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -23,11 +24,17 @@ export default function CommissionerUsersPage() {
     setCurrentUserId(user?.id || null);
     const { data, error } = await db.rpc("admin_list_users");
     if (error) {
+      setExcludedUserIds(null);
       setMessage("You must be an authorized commissioner to view users.");
       return;
     }
     setUsers((data || []) as ManagedUser[]);
-    setMessage("");
+    const { data: excluded, error: excludedError } = await db
+      .from("profiles")
+      .select("id")
+      .eq("hide_from_leaderboards", true);
+    setExcludedUserIds(excludedError ? null : new Set((excluded || []).map((profile) => profile.id)));
+    setMessage(excludedError ? "Could not load the user total. Refresh to try again." : "");
   }
 
   useEffect(() => { loadUsers(); }, []);
@@ -53,9 +60,14 @@ export default function CommissionerUsersPage() {
     }
   }
 
+  const totalUsers = excludedUserIds === null
+    ? null
+    : users.filter((user) => !excludedUserIds.has(user.id)).length;
+
   return (
     <>
       <h1>Registered users</h1>
+      <p><strong>Total users: {totalUsers ?? "—"}</strong> <span className="muted">(excluding test accounts)</span></p>
       <p className="muted">View everyone who has signed up for Mooberball. Times are shown in Pittsburgh time.</p>
       <div className="panel" style={{ overflowX: "auto" }}>
         <table>
