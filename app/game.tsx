@@ -168,6 +168,7 @@ export default function Game() {
       db
         .from("profiles")
         .select("id,username,avatar_url")
+        .eq("hide_from_leaderboards", false)
         .order("username")
         .limit(1000),
       db

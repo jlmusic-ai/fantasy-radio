@@ -65,20 +65,24 @@ export default function WeeklyRecap({ userId, finalized }: { userId: string | nu
       const previousWeek = previousMonday.toISOString().slice(0, 10);
       const [current, previous, bestPick, bestBonus, ownDetails] = await Promise.all([
         db.from("weekly_score_snapshots")
-          .select("user_id,score,profiles(username)").eq("week_id", week)
+          .select("user_id,score,profiles!inner(username)").eq("week_id", week)
+          .eq("profiles.hide_from_leaderboards", false)
           .order("score", { ascending: false }).limit(1000),
         previousWeek >= FIRST_SEASON_START
           ? db.from("weekly_score_snapshots")
-            .select("user_id,score,profiles(username)").eq("week_id", previousWeek)
+            .select("user_id,score,profiles!inner(username)").eq("week_id", previousWeek)
+            .eq("profiles.hide_from_leaderboards", false)
             .order("score", { ascending: false }).limit(1000)
           : Promise.resolve({ data: [] as Player[], error: null }),
         db.from("weekly_score_details")
-          .select("user_id,topic_name,scoring_type,allocated_points,occurrences,earned,guess,profiles(username)")
+          .select("user_id,topic_name,scoring_type,allocated_points,occurrences,earned,guess,profiles!inner(username)")
           .eq("week_id", week).eq("scoring_type", "allocation")
+          .eq("profiles.hide_from_leaderboards", false)
           .order("earned", { ascending: false }).limit(1).maybeSingle(),
         db.from("weekly_score_details")
-          .select("user_id,topic_name,scoring_type,allocated_points,occurrences,earned,guess,profiles(username)")
+          .select("user_id,topic_name,scoring_type,allocated_points,occurrences,earned,guess,profiles!inner(username)")
           .eq("week_id", week).eq("scoring_type", "closest_guess")
+          .eq("profiles.hide_from_leaderboards", false)
           .order("earned", { ascending: false }).limit(1).maybeSingle(),
         db.from("weekly_score_details")
           .select("user_id,topic_name,scoring_type,allocated_points,occurrences,earned,guess,profiles(username)")

@@ -2,7 +2,7 @@
 create extension if not exists pgcrypto;
 create schema if not exists private;
 revoke all on schema private from public,anon,authenticated;
-create table public.profiles (id uuid primary key references auth.users(id) on delete cascade, username text not null unique check(length(username) between 3 and 30), avatar_url text, is_commissioner boolean not null default false, created_at timestamptz not null default now());
+create table public.profiles (id uuid primary key references auth.users(id) on delete cascade, username text not null unique check(length(username) between 3 and 30), avatar_url text, is_commissioner boolean not null default false, hide_from_leaderboards boolean not null default false, created_at timestamptz not null default now());
 create table public.categories (id uuid primary key default gen_random_uuid(), name text not null unique, description text not null default '', active boolean not null default true, scoring_type text not null default 'allocation' check(scoring_type in ('allocation','closest_guess')), display_order integer not null default 0);
 create table public.weeks (id date primary key, lock_at timestamptz not null, season_start date not null);
 create table public.picks (user_id uuid not null references public.profiles(id) on delete cascade, week_id date not null references public.weeks(id), category_id uuid not null references public.categories(id), points integer not null check(points between 0 and 25), primary key(user_id,week_id,category_id));
@@ -443,6 +443,8 @@ create or replace view public.weekly_scores
 with (security_invoker=true) as
 select c.week_id,c.user_id,c.username,c.score,c.avatar_url
 from public.calculated_weekly_scores c
+join public.profiles leaderboard_profile
+  on leaderboard_profile.id=c.user_id and not leaderboard_profile.hide_from_leaderboards
 where not exists (
   select 1 from public.finalized_weeks f where f.week_id=c.week_id
 ) or exists (
@@ -454,7 +456,7 @@ where not exists (
 union all
 select s.week_id,s.user_id,p.username,s.score,p.avatar_url
 from public.weekly_score_snapshots s
-join public.profiles p on p.id=s.user_id
+join public.profiles p on p.id=s.user_id and not p.hide_from_leaderboards
 join public.finalized_weeks f on f.week_id=s.week_id
 where f.scores_finalized_at is not null
   or s.week_id<>(now() at time zone 'America/New_York')::date
@@ -935,7 +937,7 @@ begin
     where p.created_at <= (
       select f.scores_finalized_at from public.finalized_weeks f
       where f.week_id=p_week
-    )
+    ) and not p.hide_from_leaderboards
   ) ranked
   join auth.users u on u.id=ranked.user_id and u.email_confirmed_at is not null
   on conflict(week_id,user_id) do nothing;
