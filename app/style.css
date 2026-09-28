@@ -232,6 +232,34 @@ label {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 16px;
 }
+.photo-reminder {
+  border-color: var(--gold-dark);
+  box-shadow: 0 0 24px rgba(255, 202, 5, 0.12);
+}
+.photo-reminder h2 {
+  color: var(--gold);
+}
+.photo-reminder p {
+  margin-bottom: 0;
+}
+.photo-reminder-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 18px;
+}
+.photo-reminder-actions .button,
+.photo-reminder-actions button {
+  display: inline-block;
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 14px;
+}
+.photo-reminder-actions .secondary-action {
+  margin-left: 0;
+  border: 1px solid var(--border);
+}
 .secondary-action {
   margin-left: 8px;
   background: transparent;

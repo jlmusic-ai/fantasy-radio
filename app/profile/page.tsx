@@ -180,7 +180,7 @@ export default function ProfilePage() {
             </label>
             <button type="submit">Save username</button>
           </form>
-          <label>
+          <label id="profile-photo">
             Profile photo
             <input
               type="file"

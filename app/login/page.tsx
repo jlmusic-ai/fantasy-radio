@@ -107,7 +107,7 @@ export default function Login() {
 
     setSubmitting(true);
     setMessage("");
-    const { error } = await browserClient().auth.signInWithPassword({
+    const { data, error } = await browserClient().auth.signInWithPassword({
       email,
       password,
       options: { captchaToken },
@@ -124,6 +124,7 @@ export default function Login() {
       return;
     }
 
+    if (data.user) sessionStorage.removeItem(`mooberball-photo-reminder-later:${data.user.id}`);
     window.location.href = "/";
   }
 

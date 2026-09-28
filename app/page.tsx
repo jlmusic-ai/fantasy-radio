@@ -1,5 +1,6 @@
 import Game from "./game";
 import RulesContent from "./rules-content";
+import PhotoReminder from "./photo-reminder";
 import { serverClient } from "../lib/server";
 
 export default async function Home() {
@@ -8,5 +9,5 @@ export default async function Home() {
     data: { user },
   } = await db.auth.getUser();
 
-  return user ? <Game /> : <RulesContent />;
+  return user ? <><PhotoReminder /><Game /></> : <RulesContent />;
 }
