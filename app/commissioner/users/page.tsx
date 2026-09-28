@@ -36,12 +36,21 @@ export default function CommissionerUsersPage() {
     if (!window.confirm(`Permanently delete ${user.username} (${user.email}) and all of their picks and scores? This cannot be undone.`)) return;
     setDeleting(user.id);
     setMessage("");
-    const db = browserClient();
-    const { error } = await db.rpc("admin_delete_user", { target_user_id: user.id });
-    setDeleting(null);
-    if (error) { setMessage(error.message); return; }
-    setUsers((current) => current.filter((item) => item.id !== user.id));
-    setMessage(`${user.username} was deleted.`);
+    try {
+      const response = await fetch("/api/commissioner/users", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: user.id }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not delete this user.");
+      setUsers((current) => current.filter((item) => item.id !== user.id));
+      setMessage(`${user.username} was deleted.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not delete this user.");
+    } finally {
+      setDeleting(null);
+    }
   }
 
   return (

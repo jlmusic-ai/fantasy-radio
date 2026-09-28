@@ -162,26 +162,6 @@ $$;
 revoke all on function public.admin_list_users() from public,anon;
 grant execute on function public.admin_list_users() to authenticated;
 
-create or replace function public.admin_delete_user(target_user_id uuid)
-returns void language plpgsql security definer set search_path=''
-as $$
-begin
-  if not exists(select 1 from public.profiles p where p.id=(select auth.uid()) and p.is_commissioner) then
-    raise exception 'Commissioner access required' using errcode='42501';
-  end if;
-  if target_user_id=(select auth.uid()) then raise exception 'You cannot delete your own account here'; end if;
-  if exists(select 1 from public.profiles p where p.id=target_user_id and p.is_commissioner) then
-    raise exception 'Commissioner accounts cannot be deleted here';
-  end if;
-  delete from storage.objects where bucket_id='avatars' and name like target_user_id::text||'/%';
-  delete from auth.users where id=target_user_id;
-  if not found then raise exception 'User not found'; end if;
-end;
-$$;
-revoke all on function public.admin_delete_user(uuid) from public,anon;
-grant execute on function public.admin_delete_user(uuid) to authenticated;
-
-
 create or replace function public.adjust_weekly_occurrences(
   p_week date,
   p_category_id uuid,
