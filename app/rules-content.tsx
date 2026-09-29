@@ -108,10 +108,10 @@ export default async function RulesContent() {
             </span>
           </li>
           <li>
-            <strong>Climb the standings.</strong>
+            <strong>Climb the leaderboard.</strong>
             <span>
-              Weekly standings rank that week&apos;s scores. Season standings
-              combine each player&apos;s points across the full season.
+              The weekly leaderboard ranks that week&apos;s scores. The season leaderboard
+              combines each player&apos;s points across the full season.
             </span>
           </li>
         </ol>
@@ -152,7 +152,7 @@ export default async function RulesContent() {
         <p className="muted">
           The first Mooberball season begins Monday, October 5, and ends Friday,
           November 20. Only weekly scores from this seven-week season count
-          toward the inaugural season standings.
+          toward the inaugural season leaderboard.
         </p>
       </section>
     </>

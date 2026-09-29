@@ -928,12 +928,15 @@ begin
   select p_week, ranked.user_id, ranked.score, ranked.place,
     ranked.tied_count>1
   from (
-    select p.id as user_id, coalesce(s.score,0)::bigint as score,
-      rank() over (order by coalesce(s.score,0) desc)::integer as place,
-      count(*) over (partition by coalesce(s.score,0)) as tied_count
+    select p.id as user_id, s.score,
+      rank() over (order by s.score desc)::integer as place,
+      count(*) over (partition by s.score) as tied_count
     from public.profiles p
-    left join public.weekly_score_snapshots s
+    join public.weekly_score_snapshots s
       on s.week_id=p_week and s.user_id=p.id
+    join public.lineup_status_totals lineup
+      on lineup.week_id=p_week and lineup.user_id=p.id
+      and lineup.allocated_points=100
     where p.created_at <= (
       select f.scores_finalized_at from public.finalized_weeks f
       where f.week_id=p_week
