@@ -8,6 +8,7 @@ type Category = {
   id: string;
   name: string;
   display_order: number;
+  scoring_type: "allocation" | "closest_guess";
 };
 
 export default function ScoreThisWeek() {
@@ -52,7 +53,7 @@ export default function ScoreThisWeek() {
     const [categoryResult, eventResult, finalizationResult, dailyStatusResult, weekResult] = await Promise.all([
       db
         .from("categories")
-        .select("id,name,display_order")
+        .select("id,name,display_order,scoring_type")
         .eq("active", true)
         .order("display_order")
         .order("name"),
@@ -66,7 +67,9 @@ export default function ScoreThisWeek() {
       db.from("weeks").select("lock_at").eq("id", week).maybeSingle(),
     ]);
 
-    const nextCategories = (categoryResult.data || []) as Category[];
+    const nextCategories = ((categoryResult.data || []) as Category[]).sort((a, b) =>
+      Number(a.scoring_type === "closest_guess") - Number(b.scoring_type === "closest_guess"),
+    );
     const nextTotals: Record<string, number> = {};
     (eventResult.data || []).forEach((event) => {
       nextTotals[event.category_id] =
@@ -255,6 +258,9 @@ export default function ScoreThisWeek() {
         return (
           <div className="panel score-topic" key={category.id}>
             <h2>{category.name}</h2>
+            {category.scoring_type === "closest_guess" && (
+              <p className="muted">Birthday bonus · Record wishes here. Bonus points are awarded only when you finalize the week.</p>
+            )}
             <div className="score-controls">
               <button
                 className="score-step"
