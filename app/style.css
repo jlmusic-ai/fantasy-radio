@@ -802,6 +802,15 @@ table:has(.player-cell) td:last-child {
 .scoring-day-heading { flex-wrap: wrap; }
 .scoring-day-heading h3 { margin: 0; color: var(--gold); }
 .scoring-day-complete { color: #80dfac; font-size: 13px; font-weight: 700; }
+.scoring-day-note {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border-left: 3px solid var(--gold);
+  background: rgba(255, 202, 5, 0.08);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.scoring-day-note strong { color: var(--gold); }
 .scoring-day-line { padding: 12px 0; border-top: 1px solid var(--border); }
 .scoring-day-heading + .scoring-day-line { margin-top: 14px; }
 .scoring-day-line span { min-width: 0; overflow-wrap: anywhere; }

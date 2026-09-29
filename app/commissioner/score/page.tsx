@@ -24,6 +24,9 @@ export default function ScoreThisWeek() {
   const [dailyComplete, setDailyComplete] = useState(false);
   const [dailySaving, setDailySaving] = useState(false);
   const [dailyMessage, setDailyMessage] = useState("");
+  const [dailyNote, setDailyNote] = useState("");
+  const [savedDailyNote, setSavedDailyNote] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [message, setMessage] = useState("");
   const week = weekStart(new Date(now));
@@ -50,7 +53,7 @@ export default function ScoreThisWeek() {
     if (!profile?.is_commissioner) return;
     setAllowed(true);
 
-    const [categoryResult, eventResult, finalizationResult, dailyStatusResult, weekResult] = await Promise.all([
+    const [categoryResult, eventResult, finalizationResult, dailyStatusResult, weekResult, noteResult] = await Promise.all([
       db
         .from("categories")
         .select("id,name,display_order,scoring_type")
@@ -65,6 +68,8 @@ export default function ScoreThisWeek() {
         .eq("week_id", week).maybeSingle(),
       db.rpc("today_scoring_status").single(),
       db.from("weeks").select("lock_at").eq("id", week).maybeSingle(),
+      db.from("daily_scoring_status").select("commissioner_note")
+        .eq("scoring_date", easternDay).maybeSingle(),
     ]);
 
     const nextCategories = ((categoryResult.data || []) as Category[]).sort((a, b) =>
@@ -81,6 +86,9 @@ export default function ScoreThisWeek() {
     setDailyComplete(
       Boolean((dailyStatusResult.data as { completed?: boolean } | null)?.completed),
     );
+    const note = noteResult.data?.commissioner_note || "";
+    setDailyNote(note);
+    setSavedDailyNote(note);
     setTotals(nextTotals);
     setDrafts(
       Object.fromEntries(
@@ -150,9 +158,11 @@ export default function ScoreThisWeek() {
     setDailySaving(true);
     setDailyMessage("");
     const nextComplete = !dailyComplete;
-    const { error } = await db.rpc("set_today_scoring_complete", {
-      p_complete: nextComplete,
-    });
+    const { error } = nextComplete
+      ? await db.rpc("save_today_scoring_note", {
+          p_note: dailyNote.trim(), p_mark_complete: true,
+        })
+      : await db.rpc("set_today_scoring_complete", { p_complete: false });
     setDailySaving(false);
     if (error) {
       setDailyMessage(error.message);
@@ -160,11 +170,28 @@ export default function ScoreThisWeek() {
       return;
     }
     setDailyComplete(nextComplete);
+    if (nextComplete) setSavedDailyNote(dailyNote.trim());
     setDailyMessage(
       nextComplete
         ? "Today’s scoring is now marked complete."
         : "Today’s scoring is now marked incomplete.",
     );
+  }
+
+  async function saveDailyNote() {
+    if (!dailyComplete || noteSaving || finalized) return;
+    setNoteSaving(true);
+    setDailyMessage("");
+    const note = dailyNote.trim();
+    const { error } = await db.rpc("save_today_scoring_note", { p_note: note });
+    setNoteSaving(false);
+    if (error) {
+      setDailyMessage(error.message);
+      return;
+    }
+    setDailyNote(note);
+    setSavedDailyNote(note);
+    setDailyMessage("Commissioner note saved.");
   }
 
   async function finalizeScores(early = false) {
@@ -234,9 +261,27 @@ export default function ScoreThisWeek() {
               : "Today’s scoring has not yet been completed."}
           </strong>
         </div>
+        <label htmlFor="commissioner-daily-note">Commissioner Notes for Today</label>
+        <textarea
+          id="commissioner-daily-note"
+          rows={4}
+          maxLength={2000}
+          value={dailyNote}
+          disabled={dailySaving || noteSaving || finalized}
+          onChange={(event) => setDailyNote(event.target.value)}
+          placeholder="Add context for today's completed scoring (optional)."
+        />
+        <p className="muted">Visible with today&apos;s counts in the scoring log once you mark the day complete.</p>
+        {dailyComplete && !finalized && (
+          <button type="button" className="secondary-button"
+            disabled={dailySaving || noteSaving || dailyNote.trim() === savedDailyNote}
+            onClick={() => void saveDailyNote()}>
+            {noteSaving ? "Saving note…" : "Save note"}
+          </button>
+        )}
         <button
           type="button"
-          disabled={dailySaving || finalized}
+          disabled={dailySaving || noteSaving || finalized}
           onClick={() => void toggleDailyScoring()}
         >
           {finalized
@@ -248,7 +293,7 @@ export default function ScoreThisWeek() {
               : "Mark today’s scoring complete"}
         </button>
         {dailyMessage && (
-          <p className={dailyMessage.includes("now marked") ? "success" : "error"}>
+          <p className={dailyMessage.includes("now marked") || dailyMessage === "Commissioner note saved." ? "success" : "error"}>
             {dailyMessage}
           </p>
         )}

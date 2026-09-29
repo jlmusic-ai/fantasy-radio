@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { browserClient } from "../lib/supabase";
 import { formatDate } from "../lib/game";
 
-type CompletedDay = { scoring_date: string; week_id: string };
+type CompletedDay = { scoring_date: string; week_id: string; commissioner_note: string };
 type DailyLine = {
   scoring_date: string;
   category_id: string;
@@ -28,7 +28,7 @@ export default function ScoringLog({ currentWeek }: { currentWeek: string }) {
     async function refresh() {
       const [completed, counts] = await Promise.all([
         db.from("daily_scoring_status")
-          .select("scoring_date,week_id")
+          .select("scoring_date,week_id,commissioner_note")
           .order("scoring_date", { ascending: false })
           .limit(500),
         db.from("daily_scoring_lines")
@@ -103,6 +103,9 @@ export default function ScoringLog({ currentWeek }: { currentWeek: string }) {
                 <strong>{line.quantity} {line.quantity === 1 ? "occurrence" : "occurrences"}</strong>
               </div>
             ))}
+            {day.commissioner_note && (
+              <p className="scoring-day-note"><strong>Commissioner Notes for Today:</strong> {day.commissioner_note}</p>
+            )}
           </section>
         );
       })}
