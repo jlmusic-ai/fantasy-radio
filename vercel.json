@@ -12,14 +12,6 @@
     {
       "path": "/api/cron/week-results",
       "schedule": "0 19 * * *"
-    },
-    {
-      "path": "/api/cron/picks-open",
-      "schedule": "0 23 * * 5"
-    },
-    {
-      "path": "/api/cron/picks-open",
-      "schedule": "0 0 * * 6"
     }
   ]
 }

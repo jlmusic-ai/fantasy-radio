@@ -1,4 +1,5 @@
 const SITE_URL = "https://mooberball.com";
+const PICKS_REMINDER = "Reminder: Next week\'s picks will open at 5pm EST!";
 const FIRST_SEASON_START = "2026-10-05";
 const FIRST_SEASON_END = "2026-11-20";
 
@@ -50,6 +51,7 @@ function resultHtml(week: string, recipient: Recipient) {
         </div>
         <p style="margin:22px 0;color:#e2e2e2;font-size:16px;line-height:1.5;">See the weekly leaderboard and how your points were earned on Mooberball.</p>
         <a href="${SITE_URL}/" style="display:inline-block;padding:14px 20px;border-radius:9px;background:#ffca05;color:#151515;font-size:16px;font-weight:800;text-decoration:none;">See final scores</a>
+        <p style="margin:24px 0 0;color:#ffca05;font-size:16px;line-height:1.5;">${escapeHtml(PICKS_REMINDER)}</p>
         <p style="margin:24px 0 0;color:#999999;font-size:12px;line-height:1.5;">Mooberball is an independent fan-made game.</p>
         ${unsubscribeFooter(unsubscribeUrl(recipient.user_id))}
       </div>
@@ -105,7 +107,7 @@ export async function dispatchWeekResults(week: string, maxBatches = 8) {
           from, to: [recipient.email],
           subject: `Mooberball ${weekLabel(week)} Results: ${ordinal(recipient.place)} Place`,
           html: resultHtml(week, recipient),
-          text: `Howdy Moober! ${recipient.username}, the scores are final. You finished ${recipient.tied ? "tied for " : ""}${ordinal(recipient.place)} place with ${recipient.score} ${recipient.score === 1 ? "point" : "points"}. See final scores: ${SITE_URL}/\n\nUnsubscribe from all Mooberball emails: ${unsubscribeUrl(recipient.user_id)}`,
+          text: `Howdy Moober! ${recipient.username}, the scores are final. You finished ${recipient.tied ? "tied for " : ""}${ordinal(recipient.place)} place with ${recipient.score} ${recipient.score === 1 ? "point" : "points"}. See final scores: ${SITE_URL}/\n\n${PICKS_REMINDER}\n\nUnsubscribe from all Mooberball emails: ${unsubscribeUrl(recipient.user_id)}`,
           headers: { "List-Unsubscribe": `<${unsubscribeUrl(recipient.user_id)}>` },
         }))),
       };
