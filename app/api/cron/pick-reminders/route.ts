@@ -109,6 +109,22 @@ async function releaseClaims(
   );
 }
 
+async function loadUsers(secret: string): Promise<AuthUser[]> {
+  const users: AuthUser[] = [];
+  const pageSize = 100;
+  for (let page = 1; ; page += 1) {
+    const response = await supabaseRequest(
+      `/auth/v1/admin/users?page=${page}&per_page=${pageSize}`,
+      secret,
+    );
+    if (!response.ok) throw new Error("Unable to load reminder recipients");
+    const payload = (await response.json()) as { users?: AuthUser[] };
+    const batch = payload.users || [];
+    users.push(...batch);
+    if (batch.length < pageSize) return users;
+  }
+}
+
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret || request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
@@ -134,26 +150,26 @@ export async function GET(request: Request) {
   }
 
   const weekId = nextMonday(parts);
-  const [usersResponse, completeResponse] = await Promise.all([
-    supabaseRequest("/auth/v1/admin/users?page=1&per_page=1000", supabaseSecret),
+  const [usersResult, completeResponse] = await Promise.allSettled([
+    loadUsers(supabaseSecret),
     supabaseRequest(
       `/rest/v1/weekly_lineup_status?week_id=eq.${weekId}&allocated_points=eq.100&select=user_id`,
       supabaseSecret,
     ),
   ]);
 
-  if (!usersResponse.ok || !completeResponse.ok) {
+  if (usersResult.status !== "fulfilled" || completeResponse.status !== "fulfilled" || !completeResponse.value.ok) {
     return Response.json(
       { error: "Unable to load reminder recipients" },
       { status: 502 },
     );
   }
 
-  const usersPayload = (await usersResponse.json()) as { users?: AuthUser[] };
+  const users = usersResult.value;
   const optedOut = await optedOutUsers(supabaseSecret);
-  const completeRows = (await completeResponse.json()) as { user_id: string }[];
+  const completeRows = (await completeResponse.value.json()) as { user_id: string }[];
   const completeUsers = new Set(completeRows.map((row) => row.user_id));
-  const recipients = (usersPayload.users || [])
+  const recipients = users
     .filter(
       (user): user is AuthUser & { email: string } =>
         Boolean(user.email && user.email_confirmed_at) &&
