@@ -97,6 +97,42 @@ export default function Login() {
   const [captchaResetKey, setCaptchaResetKey] = useState(0);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown((seconds) => seconds - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
+  async function resendConfirmation() {
+    if (submitting || resendCooldown > 0 || !captchaToken || !email.trim()) return;
+    setSubmitting(true);
+    setMessage("");
+    try {
+      const { error } = await browserClient().auth.resend({
+        type: "signup",
+        email: email.trim(),
+        options: { captchaToken, emailRedirectTo: `${window.location.origin}/` },
+      });
+      if (error) {
+        setMessage(/rate|too many/i.test(error.message)
+          ? "Please wait a little before requesting another confirmation email."
+          : /captcha/i.test(error.message)
+            ? "Bot verification failed or expired. Please complete it again."
+            : error.message);
+      } else {
+        setMessage("If your account needs confirmation, a new confirmation email has been requested. Check your inbox and Spam/Junk folder, then open the newest confirmation link.");
+      }
+      setResendCooldown(60);
+    } catch {
+      setMessage("We could not request the confirmation email. Please try again.");
+    } finally {
+      setSubmitting(false);
+      setCaptchaResetKey((current) => current + 1);
+    }
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -116,8 +152,12 @@ export default function Login() {
 
     if (error) {
       setSubmitting(false);
+      const unconfirmed = error.code === "email_not_confirmed" || /email not confirmed/i.test(error.message);
+      setNeedsConfirmation(unconfirmed);
       setMessage(
-        /captcha/i.test(error.message)
+        unconfirmed
+          ? "Your email address still needs confirmation. Check your inbox and Spam/Junk folder, or request a new email below after completing bot verification again."
+          : /captcha/i.test(error.message)
           ? "Bot verification failed or expired. Please complete it again."
           : error.message,
       );
@@ -132,12 +172,15 @@ export default function Login() {
     <div className="panel" style={{ maxWidth: 480, margin: "auto" }}>
       <h1>Log in</h1>
       <form onSubmit={submit}>
-        <label>Email<input type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+        <label>Email<input type="email" required autoComplete="email" value={email} onChange={(event) => { setEmail(event.target.value); setNeedsConfirmation(false); }} /></label>
         <label>Password<input type="password" required autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
         <TurnstileChallenge onToken={setCaptchaToken} resetKey={captchaResetKey} />
         <button disabled={submitting || !captchaToken} type="submit">{submitting ? "Logging in…" : "Log in"}</button>
       </form>
       <p className="error" aria-live="polite">{message}</p>
+      {needsConfirmation && <button type="button" onClick={resendConfirmation} disabled={submitting || !captchaToken || resendCooldown > 0}>
+        {resendCooldown > 0 ? `Resend available in ${resendCooldown}s` : "Resend confirmation email"}
+      </button>}
       <p><a href="/forgot-password">Forgot your password?</a></p>
       <a href="/signup">Create an account</a>
     </div>
