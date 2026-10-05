@@ -21,7 +21,8 @@ type Category = {
   scoring_type: "allocation" | "closest_guess";
   display_order: number;
 };
-type Pick = { category_id: string; points: number };
+type Pick = { category_id: string; points: number; topic_name?: string };
+type PickWithTopic = Pick & { categories: { name: string } | { name: string }[] | null };
 type FrozenLine = { category_id: string; topic_name: string; scoring_type: string; allocated_points: number; occurrences: number; earned: number; guess: number | null };
 type WeeklyBreakdown = { picks: Pick[]; guess: number | null; frozen?: FrozenLine[] };
 type PlayerProfile = {
@@ -184,7 +185,7 @@ export default function Game() {
         .eq("week_id", w).maybeSingle(),
       db.rpc("today_scoring_status").single(),
     ]);
-    setCategories((cats.data || []) as Category[]);
+    if (!cats.error) setCategories((cats.data || []) as Category[]);
     setDailyScoringComplete(
       Boolean((dailyStatus.data as DailyScoringStatus | null)?.completed),
     );
@@ -436,7 +437,7 @@ export default function Game() {
       return;
     }
     const [savedPicks, savedGuess] = await Promise.all([
-      db.from("picks").select("category_id,points")
+      db.from("picks").select("category_id,points,categories(name)")
         .eq("week_id", week).eq("user_id", playerId),
       db.from("birthday_predictions").select("guess")
         .eq("week_id", week).eq("user_id", playerId).maybeSingle(),
@@ -446,10 +447,16 @@ export default function Game() {
     if (savedPicks.error || savedGuess.error) {
       setBreakdownError("Unable to load this lineup right now.");
     } else {
-      setWeeklyBreakdown({
-        picks: (savedPicks.data || []) as Pick[],
-        guess: savedGuess.data?.guess ?? null,
-      });
+      const namedPicks = ((savedPicks.data || []) as unknown as PickWithTopic[]).map((pick) => ({
+        category_id: pick.category_id,
+        points: pick.points,
+        topic_name: Array.isArray(pick.categories) ? pick.categories[0]?.name : pick.categories?.name,
+      }));
+      if (namedPicks.some((pick) => !pick.topic_name)) {
+        setBreakdownError("Unable to load this lineup's topic names right now. Please try again.");
+      } else {
+        setWeeklyBreakdown({ picks: namedPicks, guess: savedGuess.data?.guess ?? null });
+      }
     }
     setBreakdownLoading(false);
   }
@@ -794,7 +801,7 @@ export default function Game() {
                       const count = events[pick.category_id] || 0;
                       return (
                         <div className="weekly-breakdown-row" key={pick.category_id}>
-                          <strong>{topic?.name || "Retired topic"}</strong>
+                          <strong>{pick.topic_name || topic?.name || "Topic unavailable"}</strong>
                           <span>{pick.points}</span><span>{count}</span>
                           <strong>{pick.points * count}</strong>
                         </div>
