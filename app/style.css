@@ -143,6 +143,37 @@ input[type="range"] {
   font-weight: 700;
   margin: 2px 0 14px;
 }
+.rank-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+}
+.rank-highlight {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 3px 10px 3px 7px;
+  white-space: nowrap;
+}
+.rank-highlight-1 {
+  color: #ffd447;
+  background: linear-gradient(110deg, #49380d, #241d0a);
+  box-shadow: 0 0 12px rgba(255, 212, 71, 0.24);
+}
+.rank-highlight-2 {
+  color: #d7dce2;
+  background: linear-gradient(110deg, #313740, #191d24);
+  box-shadow: 0 0 12px rgba(215, 220, 226, 0.16);
+}
+.rank-highlight-3 {
+  color: #e8a05b;
+  background: linear-gradient(110deg, #46301e, #261b15);
+  box-shadow: 0 0 12px rgba(205, 127, 50, 0.18);
+}
 .error {
   color: #ff8585;
 }

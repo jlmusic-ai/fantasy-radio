@@ -507,16 +507,28 @@ export default function Game() {
           <div className="muted">YOUR WEEKLY SCORE</div>
           <div className="score">{score} pts</div>
           <div className="weekly-rank" role="status">
-            <div>
-              Weekly rank: {weeklyEligibilityError ? "Temporarily unavailable" :
+            <div className="rank-row">
+              <span>Weekly rank:</span>
+              {weeklyEligibilityError ? "Temporarily unavailable" :
                 !user ? "Log in to view" :
                 !locked ? "Starts when picks lock" :
-                currentWeeklyRank ? `${weeklyRankIsTied ? "Tied for " : ""}#${currentWeeklyRank} of ${leaders.length}` :
+                currentWeeklyRank ? (
+                  <span className={currentWeeklyRank <= 3 ? `rank-highlight rank-highlight-${currentWeeklyRank}` : undefined}>
+                    {currentWeeklyRank <= 3 && <SeasonTrophy rank={currentWeeklyRank} />}
+                    {weeklyRankIsTied ? "Tied for " : ""}#{currentWeeklyRank} of {leaders.length}
+                  </span>
+                ) :
                 "No submitted lineup"}
             </div>
-            <div>
-              Season rank: {!user ? "Log in to view" :
-                currentSeasonRank ? `#${currentSeasonRank} of ${seasonLeaders.length}` :
+            <div className="rank-row">
+              <span>Season rank:</span>
+              {!user ? "Log in to view" :
+                currentSeasonRank ? (
+                  <span className={currentSeasonRank <= 3 ? `rank-highlight rank-highlight-${currentSeasonRank}` : undefined}>
+                    {currentSeasonRank <= 3 && <SeasonTrophy rank={currentSeasonRank} />}
+                    #{currentSeasonRank} of {seasonLeaders.length}
+                  </span>
+                ) :
                 "Not ranked yet"}
             </div>
           </div>
