@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Avatar from "../avatar";
+import FoundingBadge from "../founding-badge";
 import { browserClient } from "../../lib/supabase";
 
 export default function ProfilePage() {
@@ -9,6 +10,7 @@ export default function ProfilePage() {
   const [userId, setUserId] = useState("");
   const [username, setUsername] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [foundingMember, setFoundingMember] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
@@ -34,12 +36,13 @@ export default function ProfilePage() {
       }
       const { data, error } = await db
         .from("profiles")
-        .select("username,avatar_url")
+        .select("username,avatar_url,founding_member")
         .eq("id", user.id)
         .single();
       if (error) setProfileMessage(error.message);
       else {
         setUsername(data.username);
+        setFoundingMember(data.founding_member);
         if (data.avatar_url) {
           const { data: signed } = await db.storage
             .from("avatars")
@@ -188,6 +191,7 @@ export default function ProfilePage() {
         <Avatar name={username} url={avatarUrl} size={72} />
         <div>
           <h1>Profile</h1>
+          {foundingMember && <FoundingBadge />}
           <p className="muted">Manage your Mooberball account.</p>
         </div>
       </div>

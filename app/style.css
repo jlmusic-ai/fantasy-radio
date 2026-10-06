@@ -577,7 +577,25 @@ table:has(.player-cell) td:last-child {
   display: inline-flex;
   min-width: 0;
   align-items: center;
+  flex-wrap: wrap;
   gap: 7px;
+}
+.founding-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border: 1px solid var(--gold-dark);
+  border-radius: 999px;
+  background: linear-gradient(110deg, #302608, #171306);
+  color: #ffda63;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  white-space: nowrap;
+  box-shadow: 0 0 10px rgba(255, 202, 5, 0.13);
 }
 .player-name-line > span:first-child {
   min-width: 0;

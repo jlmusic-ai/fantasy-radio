@@ -12,6 +12,7 @@ import {
   weekStart,
 } from "../lib/game";
 import Avatar from "./avatar";
+import FoundingBadge from "./founding-badge";
 import WeeklyRecap from "./weekly-recap";
 import ScoringLog from "./scoring-log";
 type Category = {
@@ -29,12 +30,14 @@ type PlayerProfile = {
   id: string;
   username: string;
   avatar_url: string | null;
+  founding_member: boolean;
 };
 type Score = {
   username: string;
   avatar_url: string | null;
   score: number;
   user_id: string;
+  founding_member?: boolean;
 };
 type PickWindow = {
   active_week: string;
@@ -168,7 +171,7 @@ export default function Game() {
         .limit(1000),
       db
         .from("profiles")
-        .select("id,username,avatar_url")
+        .select("id,username,avatar_url,founding_member")
         .eq("hide_from_leaderboards", false)
         .order("username")
         .limit(1000),
@@ -226,6 +229,7 @@ export default function Game() {
           username: player.username,
           avatar_url: player.avatar_url,
           score: scoresByUser.get(player.id) ?? 0,
+          founding_member: player.founding_member,
         }))
         .sort(
           (a, b) =>
@@ -766,6 +770,7 @@ export default function Game() {
                         ) : (
                           <span>{p.username}</span>
                         )}
+                        {p.founding_member && <FoundingBadge />}
                         {tab === "season" && <SeasonTrophy rank={i + 1} />}
                         {tab === "weekly" && (
                           <span
@@ -813,6 +818,7 @@ export default function Game() {
                   <div>
                     <span className="eyebrow">Week beginning {formatDate(week)}</span>
                     <h3>{selectedWeeklyPlayer.username}&apos;s lineup</h3>
+                    {selectedWeeklyPlayer.founding_member && <FoundingBadge />}
                   </div>
                 </div>
                 <button type="button" className="season-stats-close"
@@ -879,6 +885,7 @@ export default function Game() {
                     <div>
                       <span className="eyebrow">Season profile</span>
                       <h3>{selectedSeasonPlayer.username}</h3>
+                      {selectedSeasonPlayer.founding_member && <FoundingBadge />}
                     </div>
                   </div>
                   <button
