@@ -112,6 +112,7 @@ export default function Game() {
   const weekRef = useRef(week);
   const lockedRef = useRef(locked);
   const bonusFinalizedRef = useRef(false);
+  const dailyScoringVersionRef = useRef("");
   const breakdownRequestRef = useRef(0);
   const avatarCacheRef = useRef(
     new Map<string, { url: string; expiresAt: number }>(),
@@ -156,7 +157,7 @@ export default function Game() {
         .order("display_order")
         .order("name"),
       db.from("weeks").select("lock_at").eq("id", w).maybeSingle(),
-      db.from("events").select("category_id,quantity").eq("week_id", w),
+      db.from("daily_scoring_lines").select("category_id,quantity").eq("week_id", w),
       db
         .from("weekly_scores")
         .select("username,avatar_url,score,user_id")
@@ -189,9 +190,9 @@ export default function Game() {
       db.rpc("today_scoring_status").single(),
     ]);
     if (!cats.error) setCategories((cats.data || []) as Category[]);
-    setDailyScoringComplete(
-      Boolean((dailyStatus.data as DailyScoringStatus | null)?.completed),
-    );
+    const todayStatus = dailyStatus.data as DailyScoringStatus | null;
+    dailyScoringVersionRef.current = todayStatus?.completed_at || "";
+    setDailyScoringComplete(Boolean(todayStatus?.completed));
     bonusFinalizedRef.current = Boolean(finalization.data?.scores_finalized_at);
     setBonusFinalized(bonusFinalizedRef.current);
     const lockAt =
@@ -339,10 +340,16 @@ export default function Game() {
         db.rpc("today_scoring_status").single(),
       ]);
       const nextWindow = pickWindowResult.data as PickWindow | null;
+      const todayStatus = dailyStatusResult.data as DailyScoringStatus | null;
       setDailyScoringComplete(
-        Boolean((dailyStatusResult.data as DailyScoringStatus | null)?.completed),
+        Boolean(todayStatus?.completed),
       );
       if (!nextWindow) return;
+      if (!dailyStatusResult.error &&
+          (todayStatus?.completed_at || "") !== dailyScoringVersionRef.current) {
+        await load({ showLoading: false, hydratePicks: false });
+        return;
+      }
       if (nextWindow.active_week !== weekRef.current) {
         await load({ showLoading: false, hydratePicks: true });
       } else {
@@ -378,7 +385,7 @@ export default function Game() {
       .channel("scores")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "events" },
+        { event: "*", schema: "public", table: "daily_scoring_status" },
         refreshVisibleData,
       )
       .subscribe();
@@ -540,6 +547,7 @@ export default function Game() {
             {baseScore} lineup points · {bonusFinalized ? `${bonus} birthday bonus` : "Birthday bonus pending"}
           </div>
           <div className="muted">Week beginning {formatDate(week)}</div>
+          <div className="muted">Points update after each day’s scoring is complete.</div>
         </div>
         <div className="panel">
           <div className="muted">LINEUP STATUS</div>
@@ -720,6 +728,7 @@ export default function Game() {
             <p className="muted season-leaderboard-dates">
               Official season: {formatDate(FIRST_SEASON_START)} through{" "}
               {formatDate(FIRST_SEASON_END)}
+              <br />Season points are added when each week is finalized.
             </p>
           )}
           <div
