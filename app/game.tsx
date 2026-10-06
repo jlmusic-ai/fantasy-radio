@@ -420,6 +420,9 @@ export default function Game() {
   const weeklyRankIsTied = currentWeeklyPlayer
     ? leaders.filter((player) => player.score === currentWeeklyPlayer.score).length > 1
     : false;
+  const currentSeasonRank = user && (seasonStats[user]?.weeksPlayed ?? 0) > 0
+    ? seasonLeaders.findIndex((player) => player.user_id === user) + 1
+    : 0;
   async function showWeeklyBreakdown(playerId: string) {
     if (!locked) return;
     if (selectedWeeklyUserId === playerId) {
@@ -504,11 +507,18 @@ export default function Game() {
           <div className="muted">YOUR WEEKLY SCORE</div>
           <div className="score">{score} pts</div>
           <div className="weekly-rank" role="status">
-            {weeklyEligibilityError ? "Weekly rank temporarily unavailable" :
-              !user ? "Log in to see your weekly rank" :
-              !locked ? "Weekly rank starts when picks lock" :
-              currentWeeklyRank ? `${weeklyRankIsTied ? "Tied for " : ""}#${currentWeeklyRank} of ${leaders.length} this week` :
-              "No weekly rank without a submitted lineup"}
+            <div>
+              Weekly rank: {weeklyEligibilityError ? "Temporarily unavailable" :
+                !user ? "Log in to view" :
+                !locked ? "Starts when picks lock" :
+                currentWeeklyRank ? `${weeklyRankIsTied ? "Tied for " : ""}#${currentWeeklyRank} of ${leaders.length}` :
+                "No submitted lineup"}
+            </div>
+            <div>
+              Season rank: {!user ? "Log in to view" :
+                currentSeasonRank ? `#${currentSeasonRank} of ${seasonLeaders.length}` :
+                "Not ranked yet"}
+            </div>
           </div>
           <div className="muted">
             {baseScore} lineup points · {bonusFinalized ? `${bonus} birthday bonus` : "Birthday bonus pending"}
