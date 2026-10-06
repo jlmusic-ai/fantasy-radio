@@ -413,6 +413,13 @@ export default function Game() {
           (player) => player.user_id === selectedSeasonPlayer.user_id,
         ) + 1
       : 0;
+  const currentWeeklyPlayer = leaders.find((player) => player.user_id === user);
+  const currentWeeklyRank = currentWeeklyPlayer
+    ? leaders.findIndex((player) => player.score === currentWeeklyPlayer.score) + 1
+    : 0;
+  const weeklyRankIsTied = currentWeeklyPlayer
+    ? leaders.filter((player) => player.score === currentWeeklyPlayer.score).length > 1
+    : false;
   async function showWeeklyBreakdown(playerId: string) {
     if (!locked) return;
     if (selectedWeeklyUserId === playerId) {
@@ -496,6 +503,13 @@ export default function Game() {
         <div className="panel">
           <div className="muted">YOUR WEEKLY SCORE</div>
           <div className="score">{score} pts</div>
+          <div className="weekly-rank" role="status">
+            {weeklyEligibilityError ? "Weekly rank temporarily unavailable" :
+              !user ? "Log in to see your weekly rank" :
+              !locked ? "Weekly rank starts when picks lock" :
+              currentWeeklyRank ? `${weeklyRankIsTied ? "Tied for " : ""}#${currentWeeklyRank} of ${leaders.length} this week` :
+              "No weekly rank without a submitted lineup"}
+          </div>
           <div className="muted">
             {baseScore} lineup points · {bonusFinalized ? `${bonus} birthday bonus` : "Birthday bonus pending"}
           </div>
@@ -698,7 +712,7 @@ export default function Game() {
             <tbody>
               {(tab === "weekly" ? leaders : seasonLeaders).map((p, i) => (
                 <tr key={p.user_id}>
-                  <td>{tab === "weekly" && bonusFinalized
+                  <td>{tab === "weekly"
                     ? leaders.findIndex((player) => player.score === p.score) + 1
                     : i + 1}</td>
                   <td>
