@@ -25,7 +25,7 @@ type Category = {
 type Pick = { category_id: string; points: number; topic_name?: string };
 type PickWithTopic = Pick & { categories: { name: string } | { name: string }[] | null };
 type FrozenLine = { category_id: string; topic_name: string; scoring_type: string; allocated_points: number; occurrences: number; earned: number; guess: number | null };
-type WeeklyBreakdown = { picks: Pick[]; guess: number | null; frozen?: FrozenLine[] };
+type WeeklyBreakdown = { picks: Pick[]; guess: number | null; occurrenceCounts?: Record<string, number>; frozen?: FrozenLine[] };
 type PlayerProfile = {
   id: string;
   username: string;
@@ -211,6 +211,9 @@ export default function Game() {
         (counts[e.category_id] = (counts[e.category_id] || 0) + e.quantity),
     );
     setEvents(counts);
+    setWeeklyBreakdown((current) => current && !current.frozen
+      ? { ...current, occurrenceCounts: counts }
+      : current);
     const submittedUsers = new Set(
       (lineupStatus.data || [])
         .filter((lineup) => lineup.allocated_points === 100)
@@ -457,15 +460,17 @@ export default function Game() {
       setBreakdownLoading(false);
       return;
     }
-    const [savedPicks, savedGuess] = await Promise.all([
+    const [savedPicks, savedGuess, completedLines] = await Promise.all([
       db.from("picks").select("category_id,points,categories(name)")
         .eq("week_id", week).eq("user_id", playerId),
       db.from("birthday_predictions").select("guess")
         .eq("week_id", week).eq("user_id", playerId).maybeSingle(),
+      db.from("daily_scoring_lines").select("category_id,quantity")
+        .eq("week_id", week),
     ]);
     if (requestId !== breakdownRequestRef.current) return;
     // The database enforces the lock too, including for direct API requests.
-    if (savedPicks.error || savedGuess.error) {
+    if (savedPicks.error || savedGuess.error || completedLines.error) {
       setBreakdownError("Unable to load this lineup right now.");
     } else {
       const namedPicks = ((savedPicks.data || []) as unknown as PickWithTopic[]).map((pick) => ({
@@ -476,7 +481,12 @@ export default function Game() {
       if (namedPicks.some((pick) => !pick.topic_name)) {
         setBreakdownError("Unable to load this lineup's topic names right now. Please try again.");
       } else {
-        setWeeklyBreakdown({ picks: namedPicks, guess: savedGuess.data?.guess ?? null });
+        const occurrenceCounts: Record<string, number> = {};
+        for (const line of completedLines.data || []) {
+          occurrenceCounts[line.category_id] =
+            (occurrenceCounts[line.category_id] || 0) + line.quantity;
+        }
+        setWeeklyBreakdown({ picks: namedPicks, guess: savedGuess.data?.guess ?? null, occurrenceCounts });
       }
     }
     setBreakdownLoading(false);
@@ -828,6 +838,7 @@ export default function Game() {
                     <span className="eyebrow">Week beginning {formatDate(week)}</span>
                     <h3>{selectedWeeklyPlayer.username}&apos;s lineup</h3>
                     {selectedWeeklyPlayer.founding_member && <FoundingBadge />}
+                    <p className="muted">Counts and earned points include completed days only.</p>
                   </div>
                 </div>
                 <button type="button" className="season-stats-close"
@@ -849,7 +860,7 @@ export default function Game() {
                       </div>
                     )) : weeklyBreakdown.picks.map((pick) => {
                       const topic = categories.find((c) => c.id === pick.category_id);
-                      const count = events[pick.category_id] || 0;
+                      const count = weeklyBreakdown.occurrenceCounts?.[pick.category_id] || 0;
                       return (
                         <div className="weekly-breakdown-row" key={pick.category_id}>
                           <strong>{pick.topic_name || topic?.name || "Topic unavailable"}</strong>
@@ -868,12 +879,19 @@ export default function Game() {
                       <div className="weekly-breakdown-row">
                         <strong>{birthdayCategory.name}</strong>
                         <span>Guess: {weeklyBreakdown.guess ?? "—"}</span>
-                        <span>{bonusFinalized ? birthdayActual : "Pending"}</span>
-                        <strong>{bonusFinalized ? birthdayBonus(weeklyBreakdown.guess, birthdayActual) : "Pending"}</strong>
+                        <span>{bonusFinalized ? weeklyBreakdown.occurrenceCounts?.[birthdayCategory.id] || 0 : "Pending"}</span>
+                        <strong>{bonusFinalized ? birthdayBonus(weeklyBreakdown.guess, weeklyBreakdown.occurrenceCounts?.[birthdayCategory.id] || 0) : "Pending"}</strong>
                       </div>
                     )}
                     <div className="weekly-breakdown-total">
-                      <strong>Weekly score</strong><strong>{selectedWeeklyPlayer.score} pts</strong>
+                      <strong>Weekly score</strong>
+                      <strong>{weeklyBreakdown.frozen
+                        ? weeklyBreakdown.frozen.reduce((sum, line) => sum + line.earned, 0)
+                        : weeklyBreakdown.picks.reduce((sum, pick) =>
+                            sum + pick.points * (weeklyBreakdown.occurrenceCounts?.[pick.category_id] || 0), 0)
+                          + (bonusFinalized && birthdayCategory
+                            ? birthdayBonus(weeklyBreakdown.guess, weeklyBreakdown.occurrenceCounts?.[birthdayCategory.id] || 0)
+                            : 0)} pts</strong>
                     </div>
                   </>
                 )
