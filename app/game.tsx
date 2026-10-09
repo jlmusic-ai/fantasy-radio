@@ -57,7 +57,7 @@ type SeasonStatsRow = {
   highest_weekly_score: number;
   average_weekly_score: number;
   best_week: string | null;
-  hundred_point_weeks: number;
+  two_hundred_point_weeks: number;
 };
 type SeasonStats = {
   weeksPlayed: number;
@@ -65,7 +65,7 @@ type SeasonStats = {
   highestWeeklyScore: number;
   averageWeeklyScore: number;
   bestWeek: string | null;
-  hundredPointWeeks: number;
+  twoHundredPointWeeks: number;
 };
 function SeasonTrophy({ rank }: { rank: number }) {
   if (rank > 3) return null;
@@ -186,7 +186,7 @@ export default function Game() {
         .limit(1000),
       db
         .from("season_player_stats")
-        .select("user_id,weeks_played,longest_streak,highest_weekly_score,average_weekly_score,best_week,hundred_point_weeks")
+        .select("user_id,weeks_played,longest_streak,highest_weekly_score,average_weekly_score,best_week,two_hundred_point_weeks")
         .limit(1000),
       db.from("finalized_weeks").select("scores_finalized_at")
         .eq("week_id", w).maybeSingle(),
@@ -284,7 +284,7 @@ export default function Game() {
         highestWeeklyScore: row?.highest_weekly_score ?? 0,
         averageWeeklyScore: row?.average_weekly_score ?? 0,
         bestWeek: row?.best_week ?? null,
-        hundredPointWeeks: row?.hundred_point_weeks ?? 0,
+        twoHundredPointWeeks: row?.two_hundred_point_weeks ?? 0,
       };
     });
     setSeasonStats(nextSeasonStats);
@@ -978,7 +978,7 @@ export default function Game() {
                   <div className="season-stat"><span>Highest weekly score</span><strong>{selectedSeasonPlayerStats.highestWeeklyScore}</strong></div>
                   <div className="season-stat"><span>Average per week</span><strong>{selectedSeasonPlayerStats.averageWeeklyScore}</strong></div>
                   <div className="season-stat"><span>Best week</span><strong>{selectedSeasonPlayerStats.bestWeek ? formatDate(selectedSeasonPlayerStats.bestWeek) : "—"}</strong></div>
-                  <div className="season-stat"><span>100+ point weeks</span><strong>{selectedSeasonPlayerStats.hundredPointWeeks}</strong></div>
+                  <div className="season-stat"><span>200+ point weeks</span><strong>{selectedSeasonPlayerStats.twoHundredPointWeeks}</strong></div>
                 </div>
                 {selectedSeasonPlayerStats.weeksPlayed === 0 && (
                   <p className="muted season-stats-note">No official season weeks played yet.</p>
