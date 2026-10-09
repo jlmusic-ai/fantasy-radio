@@ -5,6 +5,7 @@ import { pickingWeek, seasonStart } from "../../lib/game";
 type Category = {
   id: string;
   name: string;
+  lineup_subtitle: string;
   scoring_type: "allocation" | "closest_guess";
   display_order: number;
 };
@@ -84,6 +85,7 @@ export default function Commissioner() {
     [savingWeek, setSavingWeek] = useState(false),
     [topicMsg, setTopicMsg] = useState(""),
     [newTopicName, setNewTopicName] = useState(""),
+    [newTopicSubtitle, setNewTopicSubtitle] = useState(""),
     [addingTopic, setAddingTopic] = useState(false),
     [removingTopic, setRemovingTopic] = useState<string | null>(null),
     [lock, setLock] = useState(`${pickingWeek(new Date())}T06:00`);
@@ -103,7 +105,7 @@ export default function Commissioner() {
     const [c, savedWeek] = await Promise.all([
       db
         .from("categories")
-        .select("id,name,scoring_type,display_order")
+        .select("id,name,lineup_subtitle,scoring_type,display_order")
         .eq("active", true)
         .order("display_order")
         .order("name"),
@@ -154,10 +156,10 @@ export default function Commissioner() {
     );
     if (!error) await load();
   }
-  function editTopic(id: string, value: string) {
+  function editTopic(id: string, field: "name" | "lineup_subtitle", value: string) {
     setCategories((items) =>
       items.map((item) =>
-        item.id === id ? { ...item, name: value } : item,
+        item.id === id ? { ...item, [field]: value } : item,
       ),
     );
   }
@@ -169,7 +171,7 @@ export default function Commissioner() {
     }
     const { error } = await db
       .from("categories")
-      .update({ name })
+      .update({ name, lineup_subtitle: item.lineup_subtitle.trim() })
       .eq("id", item.id);
     setTopicMsg(error ? error.message : "Weekly lineup topic saved.");
     if (!error) load();
@@ -187,6 +189,7 @@ export default function Commissioner() {
     const { error } = await db.from("categories").insert({
       name,
       description: "",
+      lineup_subtitle: newTopicSubtitle.trim(),
       active: true,
       scoring_type: "allocation",
       display_order: nextOrder,
@@ -197,6 +200,7 @@ export default function Commissioner() {
       return;
     }
     setNewTopicName("");
+    setNewTopicSubtitle("");
     setTopicMsg("New weekly lineup topic added.");
     await load();
   }
@@ -300,6 +304,16 @@ export default function Commissioner() {
               onChange={(e) => setNewTopicName(e.target.value)}
             />
           </label>
+          <label>
+            Subtitle / qualifications (optional)
+            <textarea
+              maxLength={1000}
+              rows={3}
+              placeholder="Explain what qualifies. Leave blank to show only the topic."
+              value={newTopicSubtitle}
+              onChange={(e) => setNewTopicSubtitle(e.target.value)}
+            />
+          </label>
           <button
             disabled={addingTopic || !newTopicName.trim()}
             onClick={addTopic}
@@ -315,7 +329,17 @@ export default function Commissioner() {
               <input
                 maxLength={100}
                 value={item.name}
-                onChange={(e) => editTopic(item.id, e.target.value)}
+                onChange={(e) => editTopic(item.id, "name", e.target.value)}
+              />
+            </label>
+            <label>
+              Subtitle / qualifications (optional)
+              <textarea
+                maxLength={1000}
+                rows={3}
+                placeholder="Explain what qualifies. Leave blank to show only the topic."
+                value={item.lineup_subtitle}
+                onChange={(e) => editTopic(item.id, "lineup_subtitle", e.target.value)}
               />
             </label>
             <div className="topic-actions">

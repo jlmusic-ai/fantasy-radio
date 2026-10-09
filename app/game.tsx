@@ -18,7 +18,7 @@ import ScoringLog from "./scoring-log";
 type Category = {
   id: string;
   name: string;
-  description: string;
+  lineup_subtitle: string;
   scoring_type: "allocation" | "closest_guess";
   display_order: number;
 };
@@ -152,7 +152,7 @@ export default function Game() {
       await Promise.all([
       db
         .from("categories")
-        .select("id,name,description,scoring_type,display_order")
+        .select("id,name,lineup_subtitle,scoring_type,display_order")
         .eq("active", true)
         .order("display_order")
         .order("name"),
@@ -638,6 +638,9 @@ export default function Game() {
                   <strong>{c.name}</strong>
                   <strong>{currentPoints} pts</strong>
                 </div>
+                {c.lineup_subtitle.trim() && (
+                  <p className="muted lineup-subtitle">{c.lineup_subtitle}</p>
+                )}
                 <p className="muted">
                   {events[c.id] || 0} occurrences ·{" "}
                   {currentPoints * (events[c.id] || 0)} points earned
@@ -681,6 +684,9 @@ export default function Game() {
           {birthdayCategory && (
             <div className="panel">
               <h3>{birthdayCategory.name}</h3>
+              {birthdayCategory.lineup_subtitle.trim() && (
+                <p className="muted lineup-subtitle">{birthdayCategory.lineup_subtitle}</p>
+              )}
               <p className="muted">
                 {bonusFinalized
                   ? `${birthdayActual} occurrences · ${bonus} bonus points earned`

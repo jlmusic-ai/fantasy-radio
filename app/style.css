@@ -143,6 +143,10 @@ input[type="range"] {
   font-weight: 700;
   margin: 2px 0 14px;
 }
+.lineup-subtitle {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
 .rank-row {
   display: flex;
   align-items: center;
