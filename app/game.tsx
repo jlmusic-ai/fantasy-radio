@@ -406,13 +406,15 @@ export default function Game() {
       (c) => c.scoring_type === "closest_guess",
     ),
     total = allocationCategories.reduce((a, c) => a + (picks[c.id] || 0), 0),
-    baseScore = allocationCategories.reduce(
-      (a, c) => a + (picks[c.id] || 0) * (events[c.id] || 0),
+    baseScore = Object.entries(picks).reduce(
+      (sum, [categoryId, points]) => sum + points * (events[categoryId] || 0),
       0,
     ),
     birthdayActual = birthdayCategory ? events[birthdayCategory.id] || 0 : 0,
     bonus = bonusFinalized ? birthdayBonus(birthdayGuess, birthdayActual) : 0,
-    score = baseScore + bonus,
+    score = bonusFinalized
+      ? leaders.find((player) => player.user_id === user)?.score ?? baseScore + bonus
+      : baseScore + bonus,
     selectedWeeklyPlayer = leaders.find(
       (player) => player.user_id === selectedWeeklyUserId,
     ),
