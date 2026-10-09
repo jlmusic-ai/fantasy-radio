@@ -152,12 +152,11 @@ export default function Game() {
       setWeeklyBreakdown(null);
       breakdownRequestRef.current++;
     }
-    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonStatsRows, finalization, dailyStatus, priorTopics] =
+    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonStatsRows, finalization, dailyStatus, priorTopics, currentTopics] =
       await Promise.all([
       db
         .from("categories")
-        .select("id,name,lineup_subtitle,scoring_type,display_order")
-        .eq("active", true)
+        .select("id,name,lineup_subtitle,scoring_type,display_order,active")
         .order("display_order")
         .order("name"),
       db.from("weeks").select("lock_at").eq("id", w).maybeSingle(),
@@ -194,8 +193,9 @@ export default function Game() {
       db.rpc("today_scoring_status").single(),
       db.from("weekly_lineup_topics").select("topic_name")
         .eq("week_id", previousWeek).limit(1000),
+      db.from("weekly_lineup_topics").select("category_id,topic_name,scoring_type")
+        .eq("week_id", w).limit(1000),
     ]);
-    if (!cats.error) setCategories((cats.data || []) as Category[]);
     setPreviousTopicNames(priorTopics.error ? null :
       new Set((priorTopics.data || []).map((topic) => topic.topic_name.trim().toLowerCase())));
     const todayStatus = dailyStatus.data as DailyScoringStatus | null;
@@ -206,6 +206,24 @@ export default function Game() {
     const lockAt =
       pickWindowData?.closes_at || ws.data?.lock_at || defaultLockAt(w);
     const isLocked = Date.now() >= new Date(lockAt).getTime();
+    if (!cats.error) {
+      const allTopics = cats.data || [];
+      if (isLocked && !currentTopics.error && currentTopics.data?.length) {
+        const savedTopics = currentTopics.data.map((topic, index) => {
+          const metadata = allTopics.find((category) => category.id === topic.category_id);
+          return {
+            id: topic.category_id,
+            name: topic.topic_name,
+            scoring_type: topic.scoring_type,
+            lineup_subtitle: metadata && metadata.name === topic.topic_name ? metadata.lineup_subtitle : "",
+            display_order: metadata?.display_order ?? index,
+          } as Category;
+        }).sort((a, b) => a.display_order - b.display_order || a.name.localeCompare(b.name));
+        setCategories(savedTopics);
+      } else if (!isLocked || !currentTopics.error) {
+        setCategories(allTopics.filter((topic) => topic.active) as Category[]);
+      }
+    }
     lockedRef.current = isLocked;
     setLocked(isLocked);
     if (!isLocked) {
