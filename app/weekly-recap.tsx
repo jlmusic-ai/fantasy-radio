@@ -41,7 +41,6 @@ export default function WeeklyRecap({ userId, finalized }: { userId: string | nu
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [shareMessage, setShareMessage] = useState("");
 
   useEffect(() => {
     if (!userId) return;
@@ -133,25 +132,11 @@ export default function WeeklyRecap({ userId, finalized }: { userId: string | nu
     return () => { cancelled = true; };
   }, [userId, finalized]);
 
-  async function share() {
-    if (!recap) return;
-    const summary = `Mooberball week of ${formatDate(recap.week)}: ${name(recap.winner)} led with ${recap.winner.score} points. ` +
-      (recap.standout ? `Top pick: ${name(recap.standout)} earned ${recap.standout.earned} points on ${recap.standout.topic_name}. ` : "") +
-      "Play at https://mooberball.com";
-    try {
-      if (navigator.share) await navigator.share({ title: "Mooberball weekly recap", text: summary });
-      else { await navigator.clipboard.writeText(summary); setShareMessage("Recap copied to clipboard."); }
-    } catch (cause) {
-      if ((cause as DOMException).name !== "AbortError") setShareMessage("Unable to share right now.");
-    }
-  }
-
   if (!userId || (!recap && !loading && !error)) return null;
   return (
     <section className="panel weekly-recap" aria-label="Weekly recap">
       <div className="recap-heading">
         <div><span className="eyebrow">Final scores · {recap ? formatDate(recap.week) : ""}</span><h2>Weekly recap</h2></div>
-        {recap && <button type="button" className="secondary-button" onClick={() => void share()}>Share recap</button>}
       </div>
       {loading && !recap && <p>Loading the latest recap…</p>}
       {error && <p className="error">{error}</p>}
@@ -184,7 +169,6 @@ export default function WeeklyRecap({ userId, finalized }: { userId: string | nu
           {recap.myDetails.some((line) => line.scoring_type === "closest_guess") &&
             <p className="muted recap-note">Birthday bonus: an exact guess earns 50 points; each number away subtracts 2, with a minimum of 5.</p>}
         </div>}
-        {shareMessage && <p role="status" className="muted recap-note">{shareMessage}</p>}
       </>}
     </section>
   );

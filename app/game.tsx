@@ -14,6 +14,7 @@ import {
 import Avatar from "./avatar";
 import FoundingBadge from "./founding-badge";
 import WeeklyRecap from "./weekly-recap";
+import ShareScore from "./share-score";
 import ScoringLog from "./scoring-log";
 type Category = {
   id: string;
@@ -586,6 +587,13 @@ export default function Game() {
           </div>
           <div className="muted">Week beginning {formatDate(week)}</div>
           <div className="muted">Points update after each day’s scoring is complete.</div>
+          {user && locked && currentWeeklyPlayer && !weeklyEligibilityError && <ShareScore card={{
+            username: currentWeeklyPlayer.username, week, score, lineup: baseScore, bonus,
+            finalized: bonusFinalized,
+            weeklyRank: `${weeklyRankIsTied ? "Tied for " : ""}#${currentWeeklyRank} of ${leaders.length}`,
+            seasonRank: currentSeasonRank ? `#${currentSeasonRank} of ${seasonLeaders.length}` : "Not ranked yet",
+          }} />}
+
         </div>
         <div className="panel">
           <div className="muted">LINEUP STATUS</div>
