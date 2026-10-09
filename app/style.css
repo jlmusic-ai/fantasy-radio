@@ -927,3 +927,12 @@ table:has(.player-cell) td:last-child {
 @media (max-width: 560px) {
   .recap-grid { grid-template-columns: 1fr; }
 }
+
+.season-high-banner {
+  display: flex; align-items: center; gap: 14px; margin: 8px 0 18px;
+  padding: 18px; border: 1px solid var(--gold); border-radius: 14px;
+  background: linear-gradient(120deg, #332800, #17140a); color: var(--gold);
+}
+.season-high-banner > span { font-size: 30px; flex-shrink: 0; }
+.season-high-banner strong { font-size: 21px; }
+.season-high-banner p { margin: 6px 0 0; color: #f5e9ba; line-height: 1.5; }

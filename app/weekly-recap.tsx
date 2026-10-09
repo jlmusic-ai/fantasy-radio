@@ -29,6 +29,7 @@ type Recap = {
   myScore: number | null;
   myRank: number | null;
   myDetails: Detail[];
+  previousSeasonBest: number | null;
 };
 
 function name(player: { profiles: { username: string } | null }) {
@@ -54,16 +55,17 @@ export default function WeeklyRecap({ userId, finalized }: { userId: string | nu
         .not("scores_finalized_at", "is", null)
         .gte("week_id", FIRST_SEASON_START)
         .lte("week_id", FIRST_SEASON_END)
-        .order("week_id", { ascending: false }).limit(1).maybeSingle();
+        .order("week_id", { ascending: false }).limit(52);
       if (cancelled) return;
       if (latest.error) { setError("Weekly recap is unavailable right now."); setLoading(false); return; }
-      const week = latest.data?.week_id;
+      const week = latest.data?.[0]?.week_id;
+      const priorFinalizedWeeks = (latest.data || []).slice(1).map((row) => row.week_id);
       if (!week) { setRecap(null); setLoading(false); return; }
 
       const previousMonday = new Date(`${week}T12:00:00Z`);
       previousMonday.setUTCDate(previousMonday.getUTCDate() - 7);
       const previousWeek = previousMonday.toISOString().slice(0, 10);
-      const [current, previous, bestPick, bestBonus, ownDetails] = await Promise.all([
+      const [current, previous, bestPick, bestBonus, ownDetails, priorBest] = await Promise.all([
         db.from("weekly_score_snapshots")
           .select("user_id,score,profiles!inner(username)").eq("week_id", week)
           .eq("profiles.hide_from_leaderboards", false)
@@ -88,9 +90,14 @@ export default function WeeklyRecap({ userId, finalized }: { userId: string | nu
           .select("user_id,topic_name,scoring_type,allocated_points,occurrences,earned,guess,profiles(username)")
           .eq("week_id", week).eq("user_id", userId)
           .order("earned", { ascending: false }),
+        priorFinalizedWeeks.length
+          ? db.from("weekly_score_snapshots").select("score")
+            .eq("user_id", userId).in("week_id", priorFinalizedWeeks)
+            .order("score", { ascending: false }).limit(1).maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
       ]);
       if (cancelled) return;
-      if ([current, previous, bestPick, bestBonus, ownDetails].some((result) => result.error)) {
+      if ([current, previous, bestPick, bestBonus, ownDetails, priorBest].some((result) => result.error)) {
         setError("Weekly recap is unavailable right now."); setLoading(false); return;
       }
       const normalizePlayers = (rows: JoinedPlayer[]): Player[] => rows.map((row) => ({
@@ -117,6 +124,7 @@ export default function WeeklyRecap({ userId, finalized }: { userId: string | nu
         birthday: bestBonus.data ? { ...bestBonus.data, profiles: joinedProfile(bestBonus.data.profiles) } as Detail : null,
         myScore: myRankIndex >= 0 ? players[myRankIndex].score : null,
         myRank: myRankIndex >= 0 ? myRankIndex + 1 : null,
+        previousSeasonBest: priorBest.data?.score ?? null,
         myDetails: (ownDetails.data || []).map((line) => ({ ...line, profiles: joinedProfile(line.profiles) })) as Detail[],
       });
       setLoading(false);
@@ -148,6 +156,11 @@ export default function WeeklyRecap({ userId, finalized }: { userId: string | nu
       {loading && !recap && <p>Loading the latest recap…</p>}
       {error && <p className="error">{error}</p>}
       {recap && <>
+        {recap.myScore !== null && recap.previousSeasonBest !== null && recap.myScore > recap.previousSeasonBest &&
+          <div className="season-high-banner" role="status">
+            <span aria-hidden="true">🎉</span>
+            <div><strong>New season high!</strong><p>You scored {recap.myScore} points this week, beating your previous best of {recap.previousSeasonBest}!</p></div>
+          </div>}
         <div className="recap-grid">
           <div><span>🏆 Weekly winner{recap.tiedWinners > 1 ? " (tie)" : ""}</span><strong>{name(recap.winner)}</strong><small>{recap.winner.score} points</small></div>
           <div><span>📈 Biggest climb</span><strong>{recap.mover?.name || "—"}</strong><small>{recap.mover ? `Up ${recap.mover.places} ${recap.mover.places === 1 ? "place" : "places"} from last week` : "No returning player climbed yet"}</small></div>
