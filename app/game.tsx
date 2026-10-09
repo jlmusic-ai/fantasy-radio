@@ -531,7 +531,7 @@ export default function Game() {
           seasonRank={currentSeasonRank} seasonPlayers={seasonLeaders.length} />
         <div className="panel">
           <div className="muted">LINEUP STATUS</div>
-          <h2>{locked ? "Locked" : "Open for picks"}</h2>
+          <h2 className={locked ? undefined : "picks-open-heading"}>{locked ? "Locked" : "Open for picks"}</h2>
           <div className="muted">{total} / 100 points allocated</div>
         </div>
       </div>

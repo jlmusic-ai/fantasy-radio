@@ -26,6 +26,7 @@ const releases: Release[] = [
         "This Changelog page keeps players informed about updates since Season 1 began.",
       ] },
       { label: "Improved", items: [
+        "The lineup status heading now turns green when picks are open.",
         "Your Weekly Score now follows a Sunday–Saturday calendar week in Pittsburgh time. Opening next week’s picks on Friday no longer replaces your current score card, giving you through Saturday night to share it.",
         "Season Profiles now count 200+ point weeks instead of 100+ point weeks, using finalized scores from the official season.",
       ] },
