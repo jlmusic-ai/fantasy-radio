@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { browserClient } from "../lib/supabase";
 import {
   birthdayBonus,
+  calendarScoreWeek,
   defaultLockAt,
   FIRST_SEASON_END,
   FIRST_SEASON_START,
@@ -98,6 +99,12 @@ export default function Game() {
     [tab, setTab] = useState("picks"),
     [loading, setLoading] = useState(true);
   const [scoreRevision, setScoreRevision] = useState(0);
+  const [leaderboardWeek, setLeaderboardWeek] = useState(() => calendarScoreWeek(new Date()));
+  const [leaderboardLocked, setLeaderboardLocked] = useState(false);
+  const [leaderboardFinalized, setLeaderboardFinalized] = useState(false);
+  const [leaderboardTopics, setLeaderboardTopics] = useState<Category[]>([]);
+  const leaderboardWeekRef = useRef(leaderboardWeek);
+  const leaderboardFinalizedRef = useRef(false);
   const weekRef = useRef(week);
   const lockedRef = useRef(locked);
   const bonusFinalizedRef = useRef(false);
@@ -127,6 +134,14 @@ export default function Game() {
     setUser(u?.id || null);
     const pickWindowData = pickWindow.data as PickWindow | null;
     const w = pickWindowData?.active_week || pickingWeek(new Date());
+    const scoreWeek = calendarScoreWeek(new Date());
+    if (leaderboardWeekRef.current !== scoreWeek) {
+      leaderboardWeekRef.current = scoreWeek;
+      setLeaderboardWeek(scoreWeek);
+      setSelectedWeeklyUserId(null);
+      setWeeklyBreakdown(null);
+      breakdownRequestRef.current++;
+    }
     const previousMonday = new Date(`${w}T12:00:00Z`);
     previousMonday.setUTCDate(previousMonday.getUTCDate() - 7);
     const previousWeek = previousMonday.toISOString().slice(0, 10);
@@ -136,11 +151,8 @@ export default function Game() {
     if (weekChanged) {
       weekRef.current = w;
       setWeek(w);
-      setSelectedWeeklyUserId(null);
-      setWeeklyBreakdown(null);
-      breakdownRequestRef.current++;
     }
-    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonStatsRows, finalization, dailyStatus, priorTopics, currentTopics] =
+    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonStatsRows, finalization, dailyStatus, priorTopics, currentTopics, scoreEligibility, scoreFinalization, scoreWeekSettings, scoreTopics, scoreLines] =
       await Promise.all([
       db
         .from("categories")
@@ -152,7 +164,7 @@ export default function Game() {
       db
         .from("weekly_scores")
         .select("username,avatar_url,score,user_id")
-        .eq("week_id", w)
+        .eq("week_id", scoreWeek)
         .order("score", { ascending: false })
         .limit(1000),
       db
@@ -183,6 +195,11 @@ export default function Game() {
         .eq("week_id", previousWeek).limit(1000),
       db.from("weekly_lineup_topics").select("category_id,topic_name,scoring_type")
         .eq("week_id", w).limit(1000),
+      db.from("weekly_lineup_status").select("user_id,allocated_points").eq("week_id", scoreWeek).limit(1000),
+      db.from("finalized_weeks").select("scores_finalized_at").eq("week_id", scoreWeek).maybeSingle(),
+      db.from("weeks").select("lock_at").eq("id", scoreWeek).maybeSingle(),
+      db.from("weekly_lineup_topics").select("category_id,topic_name,scoring_type").eq("week_id", scoreWeek).limit(1000),
+      db.from("daily_scoring_lines").select("category_id,quantity").eq("week_id", scoreWeek),
     ]);
     setPreviousTopicNames(priorTopics.error ? null :
       new Set((priorTopics.data || []).map((topic) => topic.topic_name.trim().toLowerCase())));
@@ -212,29 +229,35 @@ export default function Game() {
         setCategories(allTopics.filter((topic) => topic.active) as Category[]);
       }
     }
+    const scoresLocked = Date.now() >= new Date(scoreWeekSettings.data?.lock_at || defaultLockAt(scoreWeek)).getTime();
+    setLeaderboardLocked(scoresLocked);
+    leaderboardFinalizedRef.current = Boolean(scoreFinalization.data?.scores_finalized_at);
+    setLeaderboardFinalized(leaderboardFinalizedRef.current);
+    if (!scoreTopics.error) setLeaderboardTopics((scoreTopics.data || []).map((topic, index) => ({
+      id: topic.category_id, name: topic.topic_name, scoring_type: topic.scoring_type,
+      lineup_subtitle: "", display_order: index,
+    })) as Category[]);
     lockedRef.current = isLocked;
     setLocked(isLocked);
-    if (!isLocked) {
-      setSelectedWeeklyUserId(null);
-      setWeeklyBreakdown(null);
-      breakdownRequestRef.current++;
-    }
     const counts: Record<string, number> = {};
     (ev.data || []).forEach(
       (e) =>
         (counts[e.category_id] = (counts[e.category_id] || 0) + e.quantity),
     );
     setEvents(counts);
-    setWeeklyBreakdown((current) => current && !current.frozen
-      ? { ...current, occurrenceCounts: counts }
-      : current);
+    const publishedCounts: Record<string, number> = {};
+    for (const line of scoreLines.data || []) publishedCounts[line.category_id] = (publishedCounts[line.category_id] || 0) + line.quantity;
+    if (!scoreLines.error) setWeeklyBreakdown((current) => current && !current.frozen
+      ? { ...current, occurrenceCounts: publishedCounts } : current);
     const submittedUsers = new Set(
       (lineupStatus.data || [])
         .filter((lineup) => lineup.allocated_points === 100)
         .map((lineup) => lineup.user_id),
     );
     setCompletedPickUsers(submittedUsers);
-    setWeeklyEligibilityError(Boolean(lineupStatus.error));
+    setWeeklyEligibilityError(Boolean(scoreEligibility.error || lb.error || scoreFinalization.error || scoreWeekSettings.error));
+    const scoringParticipants = new Set((scoreEligibility.data || [])
+      .filter((lineup) => lineup.allocated_points === 100).map((lineup) => lineup.user_id));
     const allPlayers = (profiles.data || []) as PlayerProfile[];
     const includeZeroScores = (scoredPlayers: Score[]) => {
       if (!allPlayers.length) return scoredPlayers;
@@ -255,7 +278,7 @@ export default function Game() {
         );
     };
     const rawLeaders = includeZeroScores((lb.data || []) as Score[])
-      .filter((player) => !isLocked || submittedUsers.has(player.user_id));
+      .filter((player) => !scoresLocked || scoringParticipants.has(player.user_id));
     const rawSeasonLeaders = includeZeroScores((sl.data || []) as Score[]);
     const statsByPlayer = new Map(
       ((seasonStatsRows.data || []) as SeasonStatsRow[]).map((row) => [
@@ -353,15 +376,21 @@ export default function Game() {
     const refreshPickWindow = async () => {
       const nowForStatus = new Date();
       setShowScoringStatus(weekStart(nowForStatus) === weekRef.current && isBroadcastScoringWindow(nowForStatus));
-      const [pickWindowResult, dailyStatusResult] = await Promise.all([
+      const [pickWindowResult, dailyStatusResult, scoreFinalResult] = await Promise.all([
         db.rpc("active_pick_window").single(),
         db.rpc("today_scoring_status").single(),
+        db.from("finalized_weeks").select("scores_finalized_at").eq("week_id", calendarScoreWeek(nowForStatus)).maybeSingle(),
       ]);
       const nextWindow = pickWindowResult.data as PickWindow | null;
       const todayStatus = dailyStatusResult.data as DailyScoringStatus | null;
       setDailyScoringComplete(
         Boolean(todayStatus?.completed),
       );
+      if (calendarScoreWeek(nowForStatus) !== leaderboardWeekRef.current ||
+          (!scoreFinalResult.error && Boolean(scoreFinalResult.data?.scores_finalized_at) !== leaderboardFinalizedRef.current)) {
+        await load({ showLoading: false, hydratePicks: false });
+        return;
+      }
       if (!nextWindow) return;
       if (!dailyStatusResult.error &&
           (todayStatus?.completed_at || "") !== dailyScoringVersionRef.current) {
@@ -384,11 +413,7 @@ export default function Game() {
           return;
         }
         setLocked(isLocked);
-        if (!isLocked) {
-          setSelectedWeeklyUserId(null);
-          setWeeklyBreakdown(null);
-          breakdownRequestRef.current++;
-        }
+
       }
     };
     const rolloverCheck = window.setInterval(refreshPickWindow, 60_000);
@@ -440,8 +465,9 @@ export default function Game() {
   const currentSeasonRank = user && (seasonStats[user]?.weeksPlayed ?? 0) > 0
     ? seasonLeaders.findIndex((player) => player.user_id === user) + 1
     : 0;
+  const leaderboardBirthdayCategory = leaderboardTopics.find((topic) => topic.scoring_type === "closest_guess");
   async function showWeeklyBreakdown(playerId: string) {
-    if (!locked) return;
+    if (!leaderboardLocked) return;
     if (selectedWeeklyUserId === playerId) {
       breakdownRequestRef.current++;
       setSelectedWeeklyUserId(null);
@@ -453,10 +479,10 @@ export default function Game() {
     setWeeklyBreakdown(null);
     setBreakdownError("");
     setBreakdownLoading(true);
-    if (bonusFinalized) {
+    if (leaderboardFinalized) {
       const snapshot = await db.from("weekly_score_details")
         .select("category_id,topic_name,scoring_type,allocated_points,occurrences,earned,guess")
-        .eq("week_id", week).eq("user_id", playerId);
+        .eq("week_id", leaderboardWeek).eq("user_id", playerId);
       if (requestId !== breakdownRequestRef.current) return;
       if (snapshot.error) setBreakdownError("Unable to load this lineup right now.");
       else setWeeklyBreakdown({ picks: [], guess: null, frozen: (snapshot.data || []) as FrozenLine[] });
@@ -465,11 +491,11 @@ export default function Game() {
     }
     const [savedPicks, savedGuess, completedLines] = await Promise.all([
       db.from("picks").select("category_id,points,categories(name)")
-        .eq("week_id", week).eq("user_id", playerId),
+        .eq("week_id", leaderboardWeek).eq("user_id", playerId),
       db.from("birthday_predictions").select("guess")
-        .eq("week_id", week).eq("user_id", playerId).maybeSingle(),
+        .eq("week_id", leaderboardWeek).eq("user_id", playerId).maybeSingle(),
       db.from("daily_scoring_lines").select("category_id,quantity")
-        .eq("week_id", week),
+        .eq("week_id", leaderboardWeek),
     ]);
     if (requestId !== breakdownRequestRef.current) return;
     // The database enforces the lock too, including for direct API requests.
@@ -722,6 +748,10 @@ export default function Game() {
       ) : tab === "weekly" || tab === "season" ? (
         <div className="panel">
           <h2>{tab === "weekly" ? "Weekly" : "Season"} leaderboard</h2>
+          {tab === "weekly" && <p className="muted">
+            Week beginning {formatDate(leaderboardWeek)} · {leaderboardFinalized ? "Final scores" : "Completed daily scores"}
+            {week !== leaderboardWeek && <><br />Pick-status badges show whether next week’s picks are in.</>}
+          </p>}
           {tab === "season" && (
             <p className="muted season-leaderboard-dates">
               Official season: {formatDate(FIRST_SEASON_START)} through{" "}
@@ -765,7 +795,7 @@ export default function Game() {
                           >
                             {p.username}
                           </button>
-                        ) : locked ? (
+                        ) : leaderboardLocked ? (
                           <button
                             type="button"
                             className="leaderboard-user-button"
@@ -811,19 +841,19 @@ export default function Game() {
             </tbody>
             </table>
           </div>
-          {tab === "weekly" && weeklyEligibilityError && locked && (
+          {tab === "weekly" && weeklyEligibilityError && leaderboardLocked && (
             <p className="error" role="alert">Unable to load submitted lineups. Please refresh the page.</p>
           )}
-          {tab === "weekly" && !weeklyEligibilityError && locked && leaders.length === 0 && (
+          {tab === "weekly" && !weeklyEligibilityError && leaderboardLocked && leaders.length === 0 && (
             <p className="muted">No players submitted a complete lineup before picks locked.</p>
           )}
-          {tab === "weekly" && locked && selectedWeeklyPlayer && (
+          {tab === "weekly" && leaderboardLocked && selectedWeeklyPlayer && (
             <section className="season-stats-card" aria-live="polite">
               <div className="season-stats-heading">
                 <div className="profile-heading">
                   <Avatar name={selectedWeeklyPlayer.username} url={selectedWeeklyPlayer.avatar_url} size={48} />
                   <div>
-                    <span className="eyebrow">Week beginning {formatDate(week)}</span>
+                    <span className="eyebrow">Week beginning {formatDate(leaderboardWeek)}</span>
                     <h3>{selectedWeeklyPlayer.username}&apos;s lineup</h3>
                     {selectedWeeklyPlayer.founding_member && <FoundingBadge />}
                     <p className="muted">Counts and earned points include completed days only.</p>
@@ -847,7 +877,7 @@ export default function Game() {
                         <span>{line.occurrences}</span><strong>{line.earned}</strong>
                       </div>
                     )) : weeklyBreakdown.picks.map((pick) => {
-                      const topic = categories.find((c) => c.id === pick.category_id);
+                      const topic = leaderboardTopics.find((c) => c.id === pick.category_id);
                       const count = weeklyBreakdown.occurrenceCounts?.[pick.category_id] || 0;
                       return (
                         <div className="weekly-breakdown-row" key={pick.category_id}>
@@ -863,12 +893,12 @@ export default function Game() {
                         <span>{line.occurrences}</span><strong>{line.earned}</strong>
                       </div>
                     ))}
-                    {!weeklyBreakdown.frozen && birthdayCategory && (
+                    {!weeklyBreakdown.frozen && leaderboardBirthdayCategory && (
                       <div className="weekly-breakdown-row">
-                        <strong>{birthdayCategory.name}</strong>
+                        <strong>{leaderboardBirthdayCategory.name}</strong>
                         <span>Guess: {weeklyBreakdown.guess ?? "—"}</span>
-                        <span>{bonusFinalized ? weeklyBreakdown.occurrenceCounts?.[birthdayCategory.id] || 0 : "Pending"}</span>
-                        <strong>{bonusFinalized ? birthdayBonus(weeklyBreakdown.guess, weeklyBreakdown.occurrenceCounts?.[birthdayCategory.id] || 0) : "Pending"}</strong>
+                        <span>{leaderboardFinalized ? weeklyBreakdown.occurrenceCounts?.[leaderboardBirthdayCategory.id] || 0 : "Pending"}</span>
+                        <strong>{leaderboardFinalized ? birthdayBonus(weeklyBreakdown.guess, weeklyBreakdown.occurrenceCounts?.[leaderboardBirthdayCategory.id] || 0) : "Pending"}</strong>
                       </div>
                     )}
                     <div className="weekly-breakdown-total">
@@ -877,8 +907,8 @@ export default function Game() {
                         ? weeklyBreakdown.frozen.reduce((sum, line) => sum + line.earned, 0)
                         : weeklyBreakdown.picks.reduce((sum, pick) =>
                             sum + pick.points * (weeklyBreakdown.occurrenceCounts?.[pick.category_id] || 0), 0)
-                          + (bonusFinalized && birthdayCategory
-                            ? birthdayBonus(weeklyBreakdown.guess, weeklyBreakdown.occurrenceCounts?.[birthdayCategory.id] || 0)
+                          + (leaderboardFinalized && leaderboardBirthdayCategory
+                            ? birthdayBonus(weeklyBreakdown.guess, weeklyBreakdown.occurrenceCounts?.[leaderboardBirthdayCategory.id] || 0)
                             : 0)} pts</strong>
                     </div>
                   </>
