@@ -18,6 +18,7 @@ const releases: Release[] = [
     title: "Score sharing and lineup improvements",
     groups: [
       { label: "Added", items: [
+        "Your scores over time lists your finalized weekly scores for Season 1, with your season total and best week.",
         "Share my score card: preview and download a personal weekly score image with your username, points, weekly rank, and season rank. On supported devices, share the image through the device’s share menu, including Facebook where available.",
         "New season high! celebrates a finalized weekly score that beats your best earlier finalized week in the season. It starts after your first completed week; ties do not count as a new record.",
         "New this week labels highlight topics that were not in the previous week’s lineup when picks are open.",
@@ -25,6 +26,7 @@ const releases: Release[] = [
         "This Changelog page keeps players informed about updates since Season 1 began.",
       ] },
       { label: "Improved", items: [
+        "Your Weekly Score now follows a Sunday–Saturday calendar week in Pittsburgh time. Opening next week’s picks on Friday no longer replaces your current score card, giving you through Saturday night to share it.",
         "Season Profiles now count 200+ point weeks instead of 100+ point weeks, using finalized scores from the official season.",
       ] },
       { label: "Fixed", items: [

@@ -26,6 +26,13 @@ export function weekStart(date: Date) {
   utc.setUTCDate(utc.getUTCDate() - ((weekday + 6) % 7));
   return utc.toISOString().slice(0, 10);
 }
+// Score cards follow Sunday–Saturday in Pittsburgh time, independently of picks.
+export function calendarScoreWeek(date: Date) {
+  const monday = new Date(`${weekStart(date)}T12:00:00Z`);
+  const day = new Intl.DateTimeFormat("en-US", { timeZone: ZONE, weekday: "short" }).format(date);
+  if (day === "Sun") monday.setUTCDate(monday.getUTCDate() + 7);
+  return monday.toISOString().slice(0, 10);
+}
 export function pickingWeek(date: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: ZONE,

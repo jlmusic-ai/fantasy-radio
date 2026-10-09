@@ -961,3 +961,11 @@ table:has(.player-cell) td:last-child {
 .changelog-label-removed { color: #d2c5e8; background: #282133; }
 .changelog-group ul { padding-left: 22px; margin: 12px 0 0; }
 .changelog-group li { line-height: 1.65; color: #ddd; margin-bottom: 10px; overflow-wrap: anywhere; }
+
+.personal-score-history { border-top: 1px solid var(--border); margin-top: 22px; padding-top: 16px; }
+.personal-score-history summary { color: var(--gold); cursor: pointer; font-weight: 700; }
+.personal-score-history p { line-height: 1.5; }
+.score-history-summary { display: flex; flex-wrap: wrap; gap: 12px; color: var(--gold); margin-bottom: 12px; }
+.score-history-list { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; }
+.score-history-list li { display: flex; justify-content: space-between; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.score-history-list strong { white-space: nowrap; color: var(--gold); }

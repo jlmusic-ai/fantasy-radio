@@ -14,7 +14,8 @@ import {
 import Avatar from "./avatar";
 import FoundingBadge from "./founding-badge";
 import WeeklyRecap from "./weekly-recap";
-import ShareScore from "./share-score";
+import PersonalScores from "./personal-scores";
+import SeasonTrophy from "./season-trophy";
 import ScoringLog from "./scoring-log";
 type Category = {
   id: string;
@@ -68,21 +69,6 @@ type SeasonStats = {
   bestWeek: string | null;
   twoHundredPointWeeks: number;
 };
-function SeasonTrophy({ rank }: { rank: number }) {
-  if (rank > 3) return null;
-  const names = ["Gold", "Silver", "Bronze"];
-  return (
-    <span
-      className={`season-trophy season-trophy-${rank}`}
-      aria-label={`${names[rank - 1]} trophy`}
-      title={`${names[rank - 1]} trophy`}
-    >
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M7 3h10v3h3v2a5 5 0 0 1-5 4.9A5 5 0 0 1 13 15.58V19h3v2H8v-2h3v-3.42A5 5 0 0 1 9 12.9 5 5 0 0 1 4 8V6h3V3Zm10 5v2.73A3 3 0 0 0 18 8h-1ZM6 8a3 3 0 0 0 1 2.73V8H6Z" />
-      </svg>
-    </span>
-  );
-}
 export default function Game() {
   const db = browserClient();
   const [user, setUser] = useState<string | null>(null),
@@ -111,6 +97,7 @@ export default function Game() {
     [message, setMessage] = useState(""),
     [tab, setTab] = useState("picks"),
     [loading, setLoading] = useState(true);
+  const [scoreRevision, setScoreRevision] = useState(0);
   const weekRef = useRef(week);
   const lockedRef = useRef(locked);
   const bonusFinalizedRef = useRef(false);
@@ -358,6 +345,7 @@ export default function Game() {
       setPicks({});
       setBirthdayGuess(null);
     }
+    setScoreRevision((revision) => revision + 1);
     if (showLoading) setLoading(false);
   }
   useEffect(() => {
@@ -433,15 +421,8 @@ export default function Game() {
       (c) => c.scoring_type === "closest_guess",
     ),
     total = allocationCategories.reduce((a, c) => a + (picks[c.id] || 0), 0),
-    baseScore = Object.entries(picks).reduce(
-      (sum, [categoryId, points]) => sum + points * (events[categoryId] || 0),
-      0,
-    ),
     birthdayActual = birthdayCategory ? events[birthdayCategory.id] || 0 : 0,
     bonus = bonusFinalized ? birthdayBonus(birthdayGuess, birthdayActual) : 0,
-    score = bonusFinalized
-      ? leaders.find((player) => player.user_id === user)?.score ?? baseScore + bonus
-      : baseScore + bonus,
     selectedWeeklyPlayer = leaders.find(
       (player) => player.user_id === selectedWeeklyUserId,
     ),
@@ -456,13 +437,6 @@ export default function Game() {
           (player) => player.user_id === selectedSeasonPlayer.user_id,
         ) + 1
       : 0;
-  const currentWeeklyPlayer = leaders.find((player) => player.user_id === user);
-  const currentWeeklyRank = currentWeeklyPlayer
-    ? leaders.findIndex((player) => player.score === currentWeeklyPlayer.score) + 1
-    : 0;
-  const weeklyRankIsTied = currentWeeklyPlayer
-    ? leaders.filter((player) => player.score === currentWeeklyPlayer.score).length > 1
-    : false;
   const currentSeasonRank = user && (seasonStats[user]?.weeksPlayed ?? 0) > 0
     ? seasonLeaders.findIndex((player) => player.user_id === user) + 1
     : 0;
@@ -553,48 +527,8 @@ export default function Game() {
         per week · 25 points maximum per category
       </p>
       <div className="grid">
-        <div className="panel">
-          <div className="muted">YOUR WEEKLY SCORE</div>
-          <div className="score">{score} pts</div>
-          <div className="weekly-rank" role="status">
-            <div className="rank-row">
-              <span>Weekly rank:</span>
-              {weeklyEligibilityError ? "Temporarily unavailable" :
-                !user ? "Log in to view" :
-                !locked ? "Starts when picks lock" :
-                currentWeeklyRank ? (
-                  <span className={currentWeeklyRank <= 3 ? `rank-highlight rank-highlight-${currentWeeklyRank}` : undefined}>
-                    {currentWeeklyRank <= 3 && <SeasonTrophy rank={currentWeeklyRank} />}
-                    {weeklyRankIsTied ? "Tied for " : ""}#{currentWeeklyRank} of {leaders.length}
-                  </span>
-                ) :
-                "No submitted lineup"}
-            </div>
-            <div className="rank-row">
-              <span>Season rank:</span>
-              {!user ? "Log in to view" :
-                currentSeasonRank ? (
-                  <span className={currentSeasonRank <= 3 ? `rank-highlight rank-highlight-${currentSeasonRank}` : undefined}>
-                    {currentSeasonRank <= 3 && <SeasonTrophy rank={currentSeasonRank} />}
-                    #{currentSeasonRank} of {seasonLeaders.length}
-                  </span>
-                ) :
-                "Not ranked yet"}
-            </div>
-          </div>
-          <div className="muted">
-            {baseScore} lineup points · {bonusFinalized ? `${bonus} birthday bonus` : "Birthday bonus pending"}
-          </div>
-          <div className="muted">Week beginning {formatDate(week)}</div>
-          <div className="muted">Points update after each day’s scoring is complete.</div>
-          {user && locked && currentWeeklyPlayer && !weeklyEligibilityError && <ShareScore card={{
-            username: currentWeeklyPlayer.username, week, score, lineup: baseScore, bonus,
-            finalized: bonusFinalized,
-            weeklyRank: `${weeklyRankIsTied ? "Tied for " : ""}#${currentWeeklyRank} of ${leaders.length}`,
-            seasonRank: currentSeasonRank ? `#${currentSeasonRank} of ${seasonLeaders.length}` : "Not ranked yet",
-          }} />}
-
-        </div>
+        <PersonalScores userId={user} revision={scoreRevision}
+          seasonRank={currentSeasonRank} seasonPlayers={seasonLeaders.length} />
         <div className="panel">
           <div className="muted">LINEUP STATUS</div>
           <h2>{locked ? "Locked" : "Open for picks"}</h2>
