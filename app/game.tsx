@@ -86,6 +86,7 @@ export default function Game() {
   const db = browserClient();
   const [user, setUser] = useState<string | null>(null),
     [categories, setCategories] = useState<Category[]>([]),
+    [previousTopicNames, setPreviousTopicNames] = useState<Set<string> | null>(null),
     [picks, setPicks] = useState<Record<string, number>>({}),
     [birthdayGuess, setBirthdayGuess] = useState<number | null>(null),
     [bonusFinalized, setBonusFinalized] = useState(false),
@@ -138,6 +139,9 @@ export default function Game() {
     setUser(u?.id || null);
     const pickWindowData = pickWindow.data as PickWindow | null;
     const w = pickWindowData?.active_week || pickingWeek(new Date());
+    const previousMonday = new Date(`${w}T12:00:00Z`);
+    previousMonday.setUTCDate(previousMonday.getUTCDate() - 7);
+    const previousWeek = previousMonday.toISOString().slice(0, 10);
     const nowForStatus = new Date();
     setShowScoringStatus(weekStart(nowForStatus) === w && isBroadcastScoringWindow(nowForStatus));
     const weekChanged = weekRef.current !== w;
@@ -148,7 +152,7 @@ export default function Game() {
       setWeeklyBreakdown(null);
       breakdownRequestRef.current++;
     }
-    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonStatsRows, finalization, dailyStatus] =
+    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonStatsRows, finalization, dailyStatus, priorTopics] =
       await Promise.all([
       db
         .from("categories")
@@ -188,8 +192,12 @@ export default function Game() {
       db.from("finalized_weeks").select("scores_finalized_at")
         .eq("week_id", w).maybeSingle(),
       db.rpc("today_scoring_status").single(),
+      db.from("weekly_lineup_topics").select("topic_name")
+        .eq("week_id", previousWeek).limit(1000),
     ]);
     if (!cats.error) setCategories((cats.data || []) as Category[]);
+    setPreviousTopicNames(priorTopics.error ? null :
+      new Set((priorTopics.data || []).map((topic) => topic.topic_name.trim().toLowerCase())));
     const todayStatus = dailyStatus.data as DailyScoringStatus | null;
     dailyScoringVersionRef.current = todayStatus?.completed_at || "";
     setDailyScoringComplete(Boolean(todayStatus?.completed));
@@ -637,7 +645,13 @@ export default function Game() {
             return (
               <div key={c.id} className="panel">
                 <div className="row">
-                  <strong>{c.name}</strong>
+                  <span className="lineup-topic-title">
+                    <strong>{c.name}</strong>
+                    {!locked && previousTopicNames &&
+                      !previousTopicNames.has(c.name.trim().toLowerCase()) && (
+                        <span className="new-topic-badge" title="This topic wasn’t in last week’s lineup">New this week</span>
+                      )}
+                  </span>
                   <strong>{currentPoints} pts</strong>
                 </div>
                 {c.lineup_subtitle.trim() && (
@@ -685,7 +699,13 @@ export default function Game() {
           })}
           {birthdayCategory && (
             <div className="panel">
-              <h3>{birthdayCategory.name}</h3>
+              <h3 className="lineup-topic-title">
+                {birthdayCategory.name}
+                {!locked && previousTopicNames &&
+                  !previousTopicNames.has(birthdayCategory.name.trim().toLowerCase()) && (
+                    <span className="new-topic-badge" title="This topic wasn’t in last week’s lineup">New this week</span>
+                  )}
+              </h3>
               {birthdayCategory.lineup_subtitle.trim() && (
                 <p className="muted lineup-subtitle">{birthdayCategory.lineup_subtitle}</p>
               )}
