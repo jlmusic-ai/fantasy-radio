@@ -8,8 +8,8 @@ import SeasonTrophy from "./season-trophy";
 type WeekScore = { week_id: string; score: number };
 type Card = { userId: string | null; week: string; username: string; score: number; lineup: number; bonus: number; finalized: boolean; submitted: boolean; rank: number; tied: boolean; players: number };
 
-export default function PersonalScores({ userId, revision, seasonRank, seasonPlayers }: {
-  userId: string | null; revision: number; seasonRank: number; seasonPlayers: number;
+export default function PersonalScores({ userId, revision, seasonRank, seasonPlayers, weeklyPlayers }: {
+  userId: string | null; revision: number; seasonRank: number; seasonPlayers: number; weeklyPlayers: number;
 }) {
   const [week, setWeek] = useState(() => calendarScoreWeek(new Date()));
   const [card, setCard] = useState<Card | null>(null);
@@ -68,7 +68,8 @@ export default function PersonalScores({ userId, revision, seasonRank, seasonPla
 
   const current = card?.week === week && card.userId === userId ? card : null;
   const locked = Date.now() >= new Date(defaultLockAt(week)).getTime();
-  const weeklyRank = current?.rank ? `${current.tied ? "Tied for " : ""}#${current.rank} of ${current.players}` : "No submitted lineup";
+  const playerCount = Math.max(weeklyPlayers, current?.players ?? 0);
+  const weeklyRank = current?.rank ? `${current.tied || (current.score === 0 && playerCount > 1) ? "Tied for " : ""}#${current.rank} of ${playerCount}` : "No submitted lineup";
   const seasonRankText = seasonRank ? `#${seasonRank} of ${seasonPlayers}` : "Not ranked yet";
   return <div className="panel personal-scores">
     <div className="muted">YOUR WEEKLY SCORE</div>

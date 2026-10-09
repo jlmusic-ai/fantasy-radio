@@ -152,7 +152,7 @@ export default function Game() {
       weekRef.current = w;
       setWeek(w);
     }
-    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonStatsRows, finalization, dailyStatus, priorTopics, currentTopics, scoreEligibility, scoreFinalization, scoreWeekSettings, scoreTopics, scoreLines] =
+    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonStatsRows, finalization, dailyStatus, priorTopics, currentTopics, scoreFinalization, scoreWeekSettings, scoreTopics, scoreLines] =
       await Promise.all([
       db
         .from("categories")
@@ -195,7 +195,6 @@ export default function Game() {
         .eq("week_id", previousWeek).limit(1000),
       db.from("weekly_lineup_topics").select("category_id,topic_name,scoring_type")
         .eq("week_id", w).limit(1000),
-      db.from("weekly_lineup_status").select("user_id,allocated_points").eq("week_id", scoreWeek).limit(1000),
       db.from("finalized_weeks").select("scores_finalized_at").eq("week_id", scoreWeek).maybeSingle(),
       db.from("weeks").select("lock_at").eq("id", scoreWeek).maybeSingle(),
       db.from("weekly_lineup_topics").select("category_id,topic_name,scoring_type").eq("week_id", scoreWeek).limit(1000),
@@ -255,9 +254,7 @@ export default function Game() {
         .map((lineup) => lineup.user_id),
     );
     setCompletedPickUsers(submittedUsers);
-    setWeeklyEligibilityError(Boolean(scoreEligibility.error || lb.error || scoreFinalization.error || scoreWeekSettings.error));
-    const scoringParticipants = new Set((scoreEligibility.data || [])
-      .filter((lineup) => lineup.allocated_points === 100).map((lineup) => lineup.user_id));
+    setWeeklyEligibilityError(Boolean(lineupStatus.error || lb.error || scoreFinalization.error || scoreWeekSettings.error));
     const allPlayers = (profiles.data || []) as PlayerProfile[];
     const includeZeroScores = (scoredPlayers: Score[]) => {
       if (!allPlayers.length) return scoredPlayers;
@@ -277,8 +274,7 @@ export default function Game() {
             b.score - a.score || a.username.localeCompare(b.username),
         );
     };
-    const rawLeaders = includeZeroScores((lb.data || []) as Score[])
-      .filter((player) => !scoresLocked || scoringParticipants.has(player.user_id));
+    const rawLeaders = includeZeroScores((lb.data || []) as Score[]);
     const rawSeasonLeaders = includeZeroScores((sl.data || []) as Score[]);
     const statsByPlayer = new Map(
       ((seasonStatsRows.data || []) as SeasonStatsRow[]).map((row) => [
@@ -554,7 +550,7 @@ export default function Game() {
       </p>
       <div className="grid">
         <PersonalScores userId={user} revision={scoreRevision}
-          seasonRank={currentSeasonRank} seasonPlayers={seasonLeaders.length} />
+          seasonRank={currentSeasonRank} seasonPlayers={seasonLeaders.length} weeklyPlayers={leaders.length} />
         <div className="panel">
           <div className="muted">LINEUP STATUS</div>
           <h2 className={locked ? undefined : "picks-open-heading"}>{locked ? "Locked" : "Open for picks"}</h2>
@@ -845,7 +841,7 @@ export default function Game() {
             <p className="error" role="alert">Unable to load submitted lineups. Please refresh the page.</p>
           )}
           {tab === "weekly" && !weeklyEligibilityError && leaderboardLocked && leaders.length === 0 && (
-            <p className="muted">No players submitted a complete lineup before picks locked.</p>
+            <p className="muted">No players are available on the leaderboard yet.</p>
           )}
           {tab === "weekly" && leaderboardLocked && selectedWeeklyPlayer && (
             <section className="season-stats-card" aria-live="polite">
