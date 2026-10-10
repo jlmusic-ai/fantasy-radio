@@ -174,6 +174,7 @@ export default function Login() {
       <form onSubmit={submit}>
         <label>Email<input type="email" required autoComplete="email" value={email} onChange={(event) => { setEmail(event.target.value); setNeedsConfirmation(false); }} /></label>
         <label>Password<input type="password" required autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+        <p className="login-forgot-link"><a href="/forgot-password">Forgot password? Reset it here</a></p>
         <TurnstileChallenge onToken={setCaptchaToken} resetKey={captchaResetKey} />
         <button disabled={submitting || !captchaToken} type="submit">{submitting ? "Logging in…" : "Log in"}</button>
       </form>
@@ -181,7 +182,6 @@ export default function Login() {
       {needsConfirmation && <button type="button" onClick={resendConfirmation} disabled={submitting || !captchaToken || resendCooldown > 0}>
         {resendCooldown > 0 ? `Resend available in ${resendCooldown}s` : "Resend confirmation email"}
       </button>}
-      <p><a href="/forgot-password">Forgot your password?</a></p>
       <a href="/signup">Create an account</a>
     </div>
   );

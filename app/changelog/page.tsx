@@ -26,6 +26,7 @@ const releases: Release[] = [
         "This Changelog page keeps players informed about updates since Season 1 began.",
       ] },
       { label: "Improved", items: [
+        "The login page now puts a prominent password reset link directly below the password field, leading to the email reset form.",
         "The weekly leaderboard again lists all visible players, including those with zero points or no current-week lineup. Pick-status badges continue to show whether each player has completed the upcoming week’s picks once they open.",
         "The weekly leaderboard and player pick breakdowns now stay on the calendar week through Saturday at 11:59 p.m. Pittsburgh time, even while next week’s picks are open.",
         "The lineup status heading now turns green when picks are open.",

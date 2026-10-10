@@ -971,3 +971,6 @@ table:has(.player-cell) td:last-child {
 .score-history-list strong { white-space: nowrap; color: var(--gold); }
 
 .picks-open-heading { color: #4ade80; }
+.login-forgot-link { margin: -6px 0 18px; text-align: right; }
+.login-forgot-link a { color: var(--gold); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.login-forgot-link a:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
