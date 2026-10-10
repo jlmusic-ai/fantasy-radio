@@ -2,7 +2,7 @@
 
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { browserClient } from "../../lib/supabase";
+import { passwordRecoveryClient } from "../../lib/password-recovery";
 
 const TURNSTILE_SITE_KEY = "0x4AAAAAAE71CdgCBE-ygwBe";
 
@@ -115,7 +115,7 @@ export default function ForgotPasswordPage() {
 
     setSubmitting(true);
     setMessage("");
-    const { error } = await browserClient().auth.resetPasswordForEmail(email.trim(), {
+    const { error } = await passwordRecoveryClient().auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${window.location.origin}/reset-password`,
       captchaToken,
     });

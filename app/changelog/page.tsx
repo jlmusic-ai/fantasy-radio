@@ -14,6 +14,13 @@ type Release = {
 // Keep newest releases first. Dates reflect releases in America/New_York.
 const releases: Release[] = [
   {
+    date: "2026-10-10",
+    title: "Password recovery fixes",
+    groups: [{ label: "Fixed", items: [
+      "New password reset emails now work when opened in an email app or a different browser. The reset page explicitly verifies the recovery session and provides clearer instructions for used, expired, or older links.",
+    ] }],
+  },
+  {
     date: "2026-10-09",
     title: "Score sharing and lineup improvements",
     groups: [

@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { browserClient } from "../../lib/supabase";
+import { recoveryErrorMessage } from "../../lib/password-recovery";
 
 export default function ResetPasswordPage() {
   const [db] = useState(browserClient);
@@ -15,27 +16,46 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     let active = true;
-
-    db.auth.getSession().then(({ data }) => {
-      if (!active) return;
-      setReady(Boolean(data.session));
-      setChecking(false);
-    });
-
-    const {
-      data: { subscription },
-    } = db.auth.onAuthStateChange((event, session) => {
-      if (!active) return;
-      if ((event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") && session) {
-        setReady(true);
-        setChecking(false);
+    async function establishRecovery() {
+      const url = new URL(window.location.href);
+      const hash = new URLSearchParams(url.hash.slice(1));
+      const errorCode = hash.get("error_code") || url.searchParams.get("error_code");
+      const cleanUrl = () => window.history.replaceState(null, "", window.location.pathname);
+      try {
+        if (errorCode || hash.has("error") || url.searchParams.has("error")) {
+          cleanUrl();
+          if (active) setMessage(recoveryErrorMessage(errorCode || undefined));
+          return;
+        }
+        const accessToken = hash.get("access_token");
+        const refreshToken = hash.get("refresh_token");
+        if (accessToken && refreshToken && hash.get("type") === "recovery") {
+          // Explicitly establish recovery from the email's tokens. This does
+          // not require a PKCE verifier from the browser that sent the email.
+          const { error } = await db.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+          cleanUrl();
+          if (error) { if (active) setMessage(recoveryErrorMessage(error.code)); return; }
+        }
+        let { data, error } = await db.auth.getSession();
+        if (!data.session && url.searchParams.has("code")) {
+          // Continue supporting recovery emails sent before this change.
+          const result = await db.auth.exchangeCodeForSession(url.searchParams.get("code")!);
+          data = result.data;
+          error = result.error;
+          cleanUrl();
+        }
+        if (active) {
+          setReady(Boolean(data.session));
+          if (!data.session) setMessage(recoveryErrorMessage(error?.code));
+        }
+      } catch {
+        if (active) setMessage("We could not verify your reset link. Please request a new reset email and try again.");
+      } finally {
+        if (active) setChecking(false);
       }
-    });
-
-    return () => {
-      active = false;
-      subscription.unsubscribe();
-    };
+    }
+    void establishRecovery();
+    return () => { active = false; };
   }, [db]);
 
   async function submit(event: FormEvent) {
@@ -87,8 +107,7 @@ export default function ResetPasswordPage() {
       {!ready && !complete ? (
         <>
           <p>
-            This reset link is invalid or has expired. Request a new password
-            reset email to continue.
+            {message || "Request a new password reset email to continue."}
           </p>
           <a href="/forgot-password">Request a new reset link</a>
         </>
