@@ -29,7 +29,7 @@ export default async function Layout({
           <nav>
             {user && <a href="/">Play</a>}
             <a href="/rules">Rules</a>
-            <a href="/changelog">Changelog</a>
+            <a href="/updates">Updates</a>
             {isCommissioner && (
               <details style={{ position: "relative" }}>
                 <summary style={{ color: "var(--gold)", cursor: "pointer" }}>
