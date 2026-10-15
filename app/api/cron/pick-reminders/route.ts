@@ -1,7 +1,7 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-import { optedOutUsers, unsubscribeFooter, unsubscribeUrl } from "../../../../lib/email-unsubscribe";
+import { optedOutUsers, unsubscribeFooter, unsubscribeHeaders, unsubscribeUrl } from "../../../../lib/email-unsubscribe";
 
 type AuthUser = {
   id: string;
@@ -225,7 +225,7 @@ export async function GET(request: Request) {
           subject: reminderSubject(weekId),
           html: reminderHtml(unsubscribeUrl(recipient.id)),
           text: `Howdy Moober! Don’t forget to lock in your picks for this week: ${SITE_URL}/\n\nPicks lock Monday at 6:00 a.m. Eastern Time.\n\nUnsubscribe from all Mooberball emails: ${unsubscribeUrl(recipient.id)}`,
-          headers: { "List-Unsubscribe": `<${unsubscribeUrl(recipient.id)}>` },
+          headers: unsubscribeHeaders(recipient.id),
         })),
       ),
     });

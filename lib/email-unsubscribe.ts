@@ -13,6 +13,17 @@ export function unsubscribeUrl(userId: string) {
   return `${SITE_URL}/unsubscribe?token=${userId}.${signature}`;
 }
 
+// RFC 8058: the mail provider POSTs to this signed URL without cookies or login.
+// Keep the footer URL separate so opening/scanning it never changes preferences.
+export function unsubscribeHeaders(userId: string) {
+  const url = new URL(unsubscribeUrl(userId));
+  url.pathname = "/api/unsubscribe";
+  return {
+    "List-Unsubscribe": `<${url.toString()}>`,
+    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+  };
+}
+
 export function unsubscribeUser(token: string | null) {
   const match = token?.match(/^([0-9a-f-]{36})\.([0-9a-f]{64})$/i);
   if (!match) return null;

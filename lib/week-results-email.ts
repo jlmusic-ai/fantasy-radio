@@ -108,7 +108,7 @@ export async function dispatchWeekResults(week: string, maxBatches = 8) {
           subject: `Mooberball ${weekLabel(week)} Results: ${ordinal(recipient.place)} Place`,
           html: resultHtml(week, recipient),
           text: `Howdy Moober! ${recipient.username}, the scores are final. You finished ${recipient.tied ? "tied for " : ""}${ordinal(recipient.place)} place with ${recipient.score} ${recipient.score === 1 ? "point" : "points"}. See final scores: ${SITE_URL}/\n\n${PICKS_REMINDER}\n\nUnsubscribe from all Mooberball emails: ${unsubscribeUrl(recipient.user_id)}`,
-          headers: { "List-Unsubscribe": `<${unsubscribeUrl(recipient.user_id)}>` },
+          headers: unsubscribeHeaders(recipient.user_id),
         }))),
       };
       let response = await fetch("https://api.resend.com/emails/batch", emailRequest);
@@ -146,4 +146,4 @@ export async function pendingResultWeeks() {
   const rows = (await response.json()) as { week_id: string }[];
   return [...new Set(rows.map((row) => row.week_id))];
 }
-import { optedOutUsers, unsubscribeFooter, unsubscribeUrl } from "./email-unsubscribe";
+import { optedOutUsers, unsubscribeFooter, unsubscribeHeaders, unsubscribeUrl } from "./email-unsubscribe";

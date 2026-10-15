@@ -14,6 +14,13 @@ type Release = {
 // Keep newest releases first. Dates reflect releases in America/New_York.
 const releases: Release[] = [
   {
+    date: "2026-10-15",
+    title: "Email preference improvements",
+    groups: [{ label: "Improved", items: [
+      "Reminder and weekly results emails now include standard one-click unsubscribe headers. The existing footer link still opens a confirmation page, so simply opening a link does not unsubscribe you.",
+    ] }],
+  },
+  {
     date: "2026-10-10",
     title: "Password recovery fixes",
     groups: [{ label: "Fixed", items: [
