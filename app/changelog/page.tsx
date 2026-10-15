@@ -15,8 +15,9 @@ type Release = {
 const releases: Release[] = [
   {
     date: "2026-10-15",
-    title: "Email preference improvements",
+    title: "Email improvements",
     groups: [{ label: "Improved", items: [
+      "Weekly results emails now explicitly say Friday at 5pm EST when sent on a day other than Friday, including weeks closed early.",
       "Reminder and weekly results emails now include standard one-click unsubscribe headers. The existing footer link still opens a confirmation page, so simply opening a link does not unsubscribe you.",
     ] }],
   },

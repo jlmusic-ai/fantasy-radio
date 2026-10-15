@@ -1,5 +1,10 @@
 const SITE_URL = "https://mooberball.com";
-const PICKS_REMINDER = "Reminder: Next week\'s picks will open at 5pm EST!";
+function picksReminder(now = new Date()) {
+  const friday = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", weekday: "short",
+  }).format(now) === "Fri";
+  return `Reminder: Next week's picks will open ${friday ? "" : "Friday "}at 5pm EST!`;
+}
 const FIRST_SEASON_START = "2026-10-05";
 const FIRST_SEASON_END = "2026-11-20";
 
@@ -32,7 +37,7 @@ function weekLabel(week: string) {
   return `week of ${week.slice(5, 7)}-${week.slice(8, 10)}-${week.slice(0, 4)}`;
 }
 
-function resultHtml(week: string, recipient: Recipient) {
+function resultHtml(week: string, recipient: Recipient, reminder: string) {
   const result = `${recipient.tied ? "Tied for " : ""}${ordinal(recipient.place)} place`;
   const name = escapeHtml(recipient.username);
   return `<!doctype html>
@@ -51,7 +56,7 @@ function resultHtml(week: string, recipient: Recipient) {
         </div>
         <p style="margin:22px 0;color:#e2e2e2;font-size:16px;line-height:1.5;">See the weekly leaderboard and how your points were earned on Mooberball.</p>
         <a href="${SITE_URL}/" style="display:inline-block;padding:14px 20px;border-radius:9px;background:#ffca05;color:#151515;font-size:16px;font-weight:800;text-decoration:none;">See final scores</a>
-        <p style="margin:24px 0 0;color:#ffca05;font-size:16px;line-height:1.5;">${escapeHtml(PICKS_REMINDER)}</p>
+        <p style="margin:24px 0 0;color:#ffca05;font-size:16px;line-height:1.5;">${escapeHtml(reminder)}</p>
         <p style="margin:24px 0 0;color:#999999;font-size:12px;line-height:1.5;">Mooberball is an independent fan-made game.</p>
         ${unsubscribeFooter(unsubscribeUrl(recipient.user_id))}
       </div>
@@ -76,6 +81,7 @@ export async function dispatchWeekResults(week: string, maxBatches = 8) {
   const resendKey = process.env.RESEND_API_KEY;
   const from = process.env.REMINDER_FROM_EMAIL;
   if (!secret || !resendKey || !from) throw new Error("Results email service is not configured");
+  const reminder = picksReminder();
   let sent = 0;
 
   for (let index = 0; index < maxBatches; index++) {
@@ -106,8 +112,8 @@ export async function dispatchWeekResults(week: string, maxBatches = 8) {
         body: JSON.stringify(recipients.map((recipient) => ({
           from, to: [recipient.email],
           subject: `Mooberball ${weekLabel(week)} Results: ${ordinal(recipient.place)} Place`,
-          html: resultHtml(week, recipient),
-          text: `Howdy Moober! ${recipient.username}, the scores are final. You finished ${recipient.tied ? "tied for " : ""}${ordinal(recipient.place)} place with ${recipient.score} ${recipient.score === 1 ? "point" : "points"}. See final scores: ${SITE_URL}/\n\n${PICKS_REMINDER}\n\nUnsubscribe from all Mooberball emails: ${unsubscribeUrl(recipient.user_id)}`,
+          html: resultHtml(week, recipient, reminder),
+          text: `Howdy Moober! ${recipient.username}, the scores are final. You finished ${recipient.tied ? "tied for " : ""}${ordinal(recipient.place)} place with ${recipient.score} ${recipient.score === 1 ? "point" : "points"}. See final scores: ${SITE_URL}/\n\n${reminder}\n\nUnsubscribe from all Mooberball emails: ${unsubscribeUrl(recipient.user_id)}`,
           headers: unsubscribeHeaders(recipient.user_id),
         }))),
       };
