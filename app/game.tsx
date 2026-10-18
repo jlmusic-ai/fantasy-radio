@@ -100,6 +100,7 @@ export default function Game() {
     [loading, setLoading] = useState(true);
   const [scoreRevision, setScoreRevision] = useState(0);
   const [leaderboardWeek, setLeaderboardWeek] = useState(() => calendarScoreWeek(new Date()));
+  const [weeklyActivePlayers, setWeeklyActivePlayers] = useState<number | null>(null);
   const [leaderboardLocked, setLeaderboardLocked] = useState(false);
   const [leaderboardFinalized, setLeaderboardFinalized] = useState(false);
   const [leaderboardTopics, setLeaderboardTopics] = useState<Category[]>([]);
@@ -152,7 +153,7 @@ export default function Game() {
       weekRef.current = w;
       setWeek(w);
     }
-    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonStatsRows, finalization, dailyStatus, priorTopics, currentTopics, scoreFinalization, scoreWeekSettings, scoreTopics, scoreLines] =
+    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonStatsRows, finalization, dailyStatus, priorTopics, currentTopics, scoreFinalization, scoreWeekSettings, scoreTopics, scoreLines, scoreLineupStatus] =
       await Promise.all([
       db
         .from("categories")
@@ -199,6 +200,8 @@ export default function Game() {
       db.from("weeks").select("lock_at").eq("id", scoreWeek).maybeSingle(),
       db.from("weekly_lineup_topics").select("category_id,topic_name,scoring_type").eq("week_id", scoreWeek).limit(1000),
       db.from("daily_scoring_lines").select("category_id,quantity").eq("week_id", scoreWeek),
+      db.from("weekly_lineup_status").select("user_id")
+        .eq("week_id", scoreWeek).eq("allocated_points", 100).limit(1000),
     ]);
     setPreviousTopicNames(priorTopics.error ? null :
       new Set((priorTopics.data || []).map((topic) => topic.topic_name.trim().toLowerCase())));
@@ -256,6 +259,12 @@ export default function Game() {
     setCompletedPickUsers(submittedUsers);
     setWeeklyEligibilityError(Boolean(lineupStatus.error || lb.error || scoreFinalization.error || scoreWeekSettings.error));
     const allPlayers = (profiles.data || []) as PlayerProfile[];
+    const visiblePlayerIds = new Set(allPlayers.map((player) => player.id));
+    setWeeklyActivePlayers(scoreLineupStatus.error || profiles.error ? null :
+      new Set((scoreLineupStatus.data || [])
+        .filter((lineup) => visiblePlayerIds.has(lineup.user_id))
+        .map((lineup) => lineup.user_id)).size);
+
     const includeZeroScores = (scoredPlayers: Score[]) => {
       if (!allPlayers.length) return scoredPlayers;
       const scoresByUser = new Map(
@@ -746,6 +755,10 @@ export default function Game() {
           <h2>{tab === "weekly" ? "Weekly" : "Season"} leaderboard</h2>
           {tab === "weekly" && <p className="muted">
             Week beginning {formatDate(leaderboardWeek)} · {leaderboardFinalized ? "Final scores" : "Completed daily scores"}
+            <br />
+            {weeklyActivePlayers === null
+              ? "Active player count unavailable"
+              : `${weeklyActivePlayers} active ${weeklyActivePlayers === 1 ? "player" : "players"} · Picks submitted for this week`}
             {week !== leaderboardWeek && <><br />Pick-status badges show whether next week’s picks are in.</>}
           </p>}
           {tab === "season" && (
