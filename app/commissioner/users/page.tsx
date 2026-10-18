@@ -17,6 +17,7 @@ export default function CommissionerUsersPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [message, setMessage] = useState("Loading users…");
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [changingRole, setChangingRole] = useState<string | null>(null);
 
   async function loadUsers() {
     const db = browserClient();
@@ -60,6 +61,33 @@ export default function CommissionerUsersPage() {
     }
   }
 
+  async function changeCommissionerAccess(user: ManagedUser) {
+    const enabled = !user.is_commissioner;
+    const question = enabled
+      ? `Give ${user.username} commissioner access? They will be able to score weeks, edit topics, manage users, and assign other commissioners.`
+      : `Remove commissioner access from ${user.username}? They will keep their account and picks.`;
+    if (!window.confirm(question)) return;
+    setChangingRole(user.id);
+    setMessage("");
+    try {
+      const response = await fetch("/api/commissioner/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: user.id, enabled }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not update commissioner access.");
+      setUsers((current) => current.map((item) => item.id === user.id
+        ? { ...item, is_commissioner: result.is_commissioner }
+        : item));
+      setMessage(`${user.username} ${enabled ? "now has" : "no longer has"} commissioner access.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not update commissioner access.");
+    } finally {
+      setChangingRole(null);
+    }
+  }
+
   const totalUsers = excludedUserIds === null
     ? null
     : users.filter((user) => !excludedUserIds.has(user.id)).length;
@@ -71,12 +99,22 @@ export default function CommissionerUsersPage() {
       <p className="muted">View everyone who has signed up for Mooberball. Times are shown in Pittsburgh time.</p>
       <div className="panel" style={{ overflowX: "auto" }}>
         <table>
-          <thead><tr><th>Username</th><th>Email</th><th>Signed up</th><th>Action</th></tr></thead>
+          <thead><tr><th>Username</th><th>Email</th><th>Signed up</th><th>Commissioner access</th><th>Action</th></tr></thead>
           <tbody>
             {users.map((user) => (
               <tr key={user.id}>
                 <td>{user.username}</td><td>{user.email}</td><td>{formatSignupDate(user.created_at)}</td>
-                <td><button disabled={deleting === user.id || user.id === currentUserId || user.is_commissioner} onClick={() => deleteUser(user)}>{deleting === user.id ? "Deleting…" : "Delete"}</button></td>
+                <td>
+                  <span>{user.is_commissioner ? "Commissioner" : "Player"}</span>{" "}
+                  <button
+                    type="button"
+                    disabled={changingRole !== null || deleting !== null || user.id === currentUserId}
+                    onClick={() => changeCommissionerAccess(user)}
+                  >
+                    {changingRole === user.id ? "Saving…" : user.is_commissioner ? "Remove access" : "Grant access"}
+                  </button>
+                </td>
+                <td><button disabled={changingRole !== null || deleting !== null || user.id === currentUserId || user.is_commissioner} onClick={() => deleteUser(user)}>{deleting === user.id ? "Deleting…" : "Delete"}</button></td>
               </tr>
             ))}
           </tbody>
@@ -84,7 +122,7 @@ export default function CommissionerUsersPage() {
         {!users.length && !message && <p>No users have signed up yet.</p>}
         {message && <p aria-live="polite">{message}</p>}
       </div>
-      <p className="muted">Commissioner accounts cannot be deleted from this page.</p>
+      <p className="muted">Commissioner accounts cannot be deleted from this page. You cannot remove your own commissioner access.</p>
     </>
   );
 }

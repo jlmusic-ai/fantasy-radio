@@ -4,6 +4,57 @@ import { commissioner } from "../../../../lib/server";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+export async function PATCH(request: Request) {
+  const { user, allowed } = await commissioner();
+  if (!user || !allowed) return NextResponse.json({ error: "Commissioner access required." }, { status: 403 });
+
+  const origin = request.headers.get("origin");
+  if (origin && origin !== new URL(request.url).origin) {
+    return NextResponse.json({ error: "Invalid request origin." }, { status: 403 });
+  }
+
+  let id: unknown;
+  let enabled: unknown;
+  try {
+    ({ id, enabled } = await request.json());
+  } catch {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+  if (typeof id !== "string" || !UUID.test(id) || typeof enabled !== "boolean") {
+    return NextResponse.json({ error: "Invalid access change." }, { status: 400 });
+  }
+  if (id === user.id) {
+    return NextResponse.json({ error: "You cannot change your own commissioner access here." }, { status: 403 });
+  }
+
+  const secret = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!secret) return NextResponse.json({ error: "User management is not configured." }, { status: 500 });
+
+  // The privileged key is used only on the server, after checking the caller's
+  // current database role. Regular players have no UPDATE grant on this column.
+  const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, secret, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const { data: target, error: lookupError } = await admin
+    .from("profiles")
+    .select("id,is_commissioner")
+    .eq("id", id)
+    .maybeSingle();
+  if (lookupError) return NextResponse.json({ error: "Could not load the account." }, { status: 500 });
+  if (!target) return NextResponse.json({ error: "User not found." }, { status: 404 });
+
+  const { data: changed, error: updateError } = await admin
+    .from("profiles")
+    .update({ is_commissioner: enabled })
+    .eq("id", id)
+    .select("id,is_commissioner")
+    .single();
+  if (updateError || !changed) {
+    return NextResponse.json({ error: "Could not update commissioner access." }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true, id: changed.id, is_commissioner: changed.is_commissioner });
+}
+
 export async function DELETE(request: Request) {
   const { user, allowed } = await commissioner();
   if (!user || !allowed) return NextResponse.json({ error: "Commissioner access required." }, { status: 403 });

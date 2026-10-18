@@ -14,6 +14,13 @@ type Release = {
 // Keep newest releases first. Dates reflect releases in America/New_York.
 const releases: Release[] = [
   {
+    date: "2026-10-18",
+    title: "Commissioner access",
+    groups: [{ label: "Added", items: [
+      "Commissioners can grant or remove commissioner access for other registered users from the Registered users page. Access to scoring, topics, and user management follows the account's current role.",
+    ] }],
+  },
+  {
     date: "2026-10-15",
     title: "Email and site updates",
     groups: [{ label: "Improved", items: [
