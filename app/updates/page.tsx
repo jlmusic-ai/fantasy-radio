@@ -17,30 +17,30 @@ const releases: Release[] = [
     date: "2026-10-19",
     title: "Lineup lock display",
     groups: [{ label: "Fixed", items: [
-      "The Play page now checks the authoritative lineup lock before showing whether picks are open. It shows a checking state while loading and keeps lineup controls disabled until the status is known.",
+      "We fixed an issue where the Play page could briefly say picks were open after they had locked. It now says “Checking lineup…” until it knows whether you can make changes.",
     ] }],
   },
   {
     date: "2026-10-18",
     title: "Commissioner access",
     groups: [{ label: "Added", items: [
-      "Commissioners can grant or remove commissioner access for other registered users from the Registered users page. Access to scoring, topics, and user management follows the account's current role.",
+      "Commissioners can now give another registered player commissioner access, or remove that access, from the Registered Users page. This lets someone else help manage the game when needed.",
     ] }],
   },
   {
     date: "2026-10-15",
     title: "Email and site updates",
     groups: [{ label: "Improved", items: [
-      "Renamed Changelog to Updates in the menu and page title.",
-      "Weekly results emails now explicitly say Friday at 5pm EST when sent on a day other than Friday, including weeks closed early.",
-      "Reminder and weekly results emails now include standard one-click unsubscribe headers. The existing footer link still opens a confirmation page, so simply opening a link does not unsubscribe you.",
+      "The Changelog page is now called Updates, so it’s easier to find what’s new.",
+      "If a week ends early, the results email now clearly says that next week’s picks open Friday at 5 p.m. Eastern time.",
+      "Reminder and results emails now make it easier to unsubscribe. The link at the bottom asks you to confirm, so opening it by accident won’t unsubscribe you.",
     ] }],
   },
   {
     date: "2026-10-10",
     title: "Password recovery fixes",
     groups: [{ label: "Fixed", items: [
-      "New password reset emails now work when opened in an email app or a different browser. The reset page explicitly verifies the recovery session and provides clearer instructions for used, expired, or older links.",
+      "We fixed an issue where password reset links could fail if you opened them in an email app or a different browser. You’ll also get a clearer message if a link has expired or has already been used.",
     ] }],
   },
   {
@@ -48,27 +48,27 @@ const releases: Release[] = [
     title: "Score sharing and lineup improvements",
     groups: [
       { label: "Added", items: [
-        "Your scores over time lists your finalized weekly scores for Season 1, with your season total and best week.",
-        "Share my score card: preview and download a personal weekly score image with your username, points, weekly rank, and season rank. On supported devices, share the image through the device’s share menu, including Facebook where available.",
-        "New season high! celebrates a finalized weekly score that beats your best earlier finalized week in the season. It starts after your first completed week; ties do not count as a new record.",
-        "New this week labels highlight topics that were not in the previous week’s lineup when picks are open.",
-        "Optional qualification subtitles are back for lineup topics, including Bob’s Birthday Wishes. Topics without a subtitle keep their usual appearance.",
-        "This Updates page keeps players informed about updates since Season 1 began.",
+        "You can now see your scores from earlier weeks, your season total, and your best week in one place.",
+        "You can turn your weekly score card into an image to download or share. It shows your name, score, and weekly and season ranks. If your device offers Facebook in its share menu, you can share it there.",
+        "After your first completed week, you’ll see a “New season high!” message whenever your finalized score beats your previous best. A tie won’t trigger it.",
+        "When picks open, new lineup topics are marked “New this week” so you can spot them quickly.",
+        "Some lineup topics, including Bob’s Birthday Wishes, can now include a short explanation of what counts. Topics without an explanation look the same as before.",
+        "This Updates page shows what’s changed since Season 1 began.",
       ] },
       { label: "Improved", items: [
-        "The login page now puts a prominent password reset link directly below the password field, leading to the email reset form.",
-        "The weekly leaderboard again lists all visible players, including those with zero points or no current-week lineup. Pick-status badges continue to show whether each player has completed the upcoming week’s picks once they open.",
-        "The weekly leaderboard and player pick breakdowns now stay on the calendar week through Saturday at 11:59 p.m. Pittsburgh time, even while next week’s picks are open.",
-        "The lineup status heading now turns green when picks are open.",
-        "Your Weekly Score now follows a Sunday–Saturday calendar week in Pittsburgh time. Opening next week’s picks on Friday no longer replaces your current score card, giving you through Saturday night to share it.",
-        "Season Profiles now count 200+ point weeks instead of 100+ point weeks, using finalized scores from the official season.",
+        "Forgot your password? The login page now has a reset link right below the password field.",
+        "The weekly leaderboard shows everyone, even players with zero points. Once next week’s picks open, the badge beside each name shows whether that player has finished their picks.",
+        "You can keep viewing this week’s leaderboard and player picks through Saturday night, even after next week’s picks open on Friday.",
+        "“Open for picks” now appears in green so it’s easier to see when you can make your lineup.",
+        "Your Weekly Score card stays on the current week through Saturday night, giving you more time to share it after next week’s picks open.",
+        "Season Profiles now show how many official weeks you scored at least 200 points.",
       ] },
       { label: "Fixed", items: [
-        "The locked weekly lineup keeps that week’s saved topics until picks open for the next week. Upcoming topic changes no longer appear early.",
-        "Your finalized weekly score and saved point allocations remain intact when lineup topics are changed or removed for an upcoming week.",
+        "We fixed an issue where next week’s lineup changes could appear on the Play page before picks opened. You’ll see this week’s topics until it’s time to pick for next week.",
+        "We fixed an issue where changing or removing a topic for a future week could affect how earlier picks or scores appeared. Your past results stay as they were.",
       ] },
       { label: "Removed", items: [
-        "Removed Share recap from the weekly recap in favor of sharing your own weekly score card.",
+        "The old Share recap option has been removed. You can share an image of your own weekly score card instead.",
       ] },
     ],
   },
@@ -77,12 +77,12 @@ const releases: Release[] = [
     title: "Scoring visibility fixes",
     groups: [
       { label: "Fixed", items: [
-        "Weekly player totals and the weekly leaderboard now include a day’s points only after the commissioner marks that day’s scoring complete.",
-        "Season totals, season rankings, and Season Profile statistics include a week only after its scores are finalized.",
-        "Individual player scorecards now withhold draft occurrence counts and earned points until the day’s scoring is complete, matching the published totals.",
+        "We fixed an issue where a day’s points could appear on your score and the weekly leaderboard before the commissioner finished scoring that day.",
+        "We fixed an issue where a week’s points could appear in season rankings before that week’s scores were final.",
+        "We fixed an issue where score cards could show things that had happened that day before the commissioner finished scoring. Score cards now match the published totals.",
       ] },
       { label: "Improved", items: [
-        "The Founding Member badge now uses a blue gemstone diamond icon.",
+        "The Founding Member badge now has a blue gemstone icon.",
       ] },
     ],
   },
@@ -91,12 +91,12 @@ const releases: Release[] = [
     title: "Season 1: ranks and founding members",
     groups: [
       { label: "Added", items: [
-        "Your weekly score card now displays your current weekly rank and season rank.",
-        "Top-three weekly and season ranks receive special gold, silver, and bronze trophy styling.",
-        "Players registered when founding status was introduced received a visible Founding Member badge, regardless of whether they submitted picks.",
+        "Your weekly score card now shows where you stand for both the week and the season.",
+        "The top three players get gold, silver, or bronze trophy icons next to their ranks.",
+        "Players who were signed up when the Founding Member badge launched received it, even if they hadn’t made picks yet.",
       ] },
       { label: "Fixed", items: [
-        "Topic names in player pick breakdowns stay stable during background refreshes instead of briefly appearing as retired options.",
+        "We fixed an issue where topic names could briefly change to “Retired option” while a player’s picks were loading.",
       ] },
     ],
   },
@@ -107,7 +107,7 @@ export default function UpdatesPage() {
     <div className="changelog-intro">
       <span className="eyebrow">Mooberball updates</span>
       <h1>Updates</h1>
-      <p className="muted">New features, improvements, and bug fixes since Season 1 began on 10-05-2026. Latest updates appear first.</p>
+      <p className="muted">See what’s new in Mooberball since Season 1 began on 10-05-2026. The newest changes are at the top.</p>
     </div>
     {releases.map((release, index) => <article className="panel changelog-release" key={release.date} aria-labelledby={`release-${release.date}`}>
       <div className="changelog-release-heading">
