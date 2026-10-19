@@ -14,6 +14,13 @@ type Release = {
 // Keep newest releases first. Dates reflect releases in America/New_York.
 const releases: Release[] = [
   {
+    date: "2026-10-19",
+    title: "Lineup lock display",
+    groups: [{ label: "Fixed", items: [
+      "The Play page now checks the authoritative lineup lock before showing whether picks are open. It shows a checking state while loading and keeps lineup controls disabled until the status is known.",
+    ] }],
+  },
+  {
     date: "2026-10-18",
     title: "Commissioner access",
     groups: [{ label: "Added", items: [

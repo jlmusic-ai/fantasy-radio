@@ -92,7 +92,7 @@ export default function Game() {
     [breakdownLoading, setBreakdownLoading] = useState(false),
     [breakdownError, setBreakdownError] = useState(""),
     [week, setWeek] = useState(pickingWeek(new Date())),
-    [locked, setLocked] = useState(false),
+    [locked, setLocked] = useState(true),
     [dailyScoringComplete, setDailyScoringComplete] = useState(false),
     [showScoringStatus, setShowScoringStatus] = useState(false),
     [message, setMessage] = useState(""),
@@ -212,7 +212,7 @@ export default function Game() {
     setBonusFinalized(bonusFinalizedRef.current);
     const lockAt =
       pickWindowData?.closes_at || ws.data?.lock_at || defaultLockAt(w);
-    const isLocked = Date.now() >= new Date(lockAt).getTime();
+    const isLocked = pickWindowData?.is_locked ?? Date.now() >= new Date(lockAt).getTime();
     if (!cats.error) {
       const allTopics = cats.data || [];
       if (isLocked && !currentTopics.error && currentTopics.data?.length) {
@@ -412,7 +412,7 @@ export default function Game() {
           await load({ showLoading: false, hydratePicks: false });
           return;
         }
-        const isLocked = Date.now() >= new Date(nextWindow.closes_at).getTime();
+        const isLocked = nextWindow.is_locked;
         if (isLocked !== lockedRef.current) {
           await load({ showLoading: false, hydratePicks: false });
           return;
@@ -562,7 +562,7 @@ export default function Game() {
           seasonRank={currentSeasonRank} seasonPlayers={seasonLeaders.length} weeklyPlayers={leaders.length} />
         <div className="panel">
           <div className="muted">LINEUP STATUS</div>
-          <h2 className={locked ? undefined : "picks-open-heading"}>{locked ? "Locked" : "Open for picks"}</h2>
+          <h2 className={!loading && !locked ? "picks-open-heading" : undefined}>{loading ? "Checking lineup…" : locked ? "Locked" : "Open for picks"}</h2>
           <div className="muted">{total} / 100 points allocated</div>
         </div>
       </div>
@@ -659,7 +659,7 @@ export default function Game() {
                   max="25"
                   step="1"
                   value={currentPoints}
-                  disabled={locked || !user}
+                  disabled={loading || locked || !user}
                   onChange={(e) => {
                     const requestedPoints = Number(e.target.value);
                     setPicks((currentPicks) => {
@@ -714,7 +714,7 @@ export default function Game() {
                   max="500"
                   step="1"
                   value={birthdayGuess ?? ""}
-                  disabled={locked || !user}
+                  disabled={loading || locked || !user}
                   onChange={(e) =>
                     setBirthdayGuess(
                       e.target.value === "" ? null : Number(e.target.value),
@@ -734,6 +734,7 @@ export default function Game() {
             <button
               disabled={
                 !user ||
+                loading ||
                 locked ||
                 total !== 100 ||
                 allocationCategories.length < 4 ||
