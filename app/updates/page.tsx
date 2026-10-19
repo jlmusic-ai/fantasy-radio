@@ -17,7 +17,7 @@ const releases: Release[] = [
     date: "2026-10-19",
     title: "Lineup lock display",
     groups: [{ label: "Fixed", items: [
-      "We fixed an issue where the Play page could briefly say picks were open after they had locked. It now says “Checking lineup…” until it knows whether you can make changes.",
+      "Fixed an issue where the Play page could briefly say picks were open after they had locked. It now says “Checking lineup…” until it knows whether you can make changes.",
     ] }],
   },
   {
@@ -40,7 +40,7 @@ const releases: Release[] = [
     date: "2026-10-10",
     title: "Password recovery fixes",
     groups: [{ label: "Fixed", items: [
-      "We fixed an issue where password reset links could fail if you opened them in an email app or a different browser. You’ll also get a clearer message if a link has expired or has already been used.",
+      "Fixed an issue where password reset links could fail if you opened them in an email app or a different browser. You’ll also get a clearer message if a link has expired or has already been used.",
     ] }],
   },
   {
@@ -64,8 +64,8 @@ const releases: Release[] = [
         "Season Profiles now show how many official weeks you scored at least 200 points.",
       ] },
       { label: "Fixed", items: [
-        "We fixed an issue where next week’s lineup changes could appear on the Play page before picks opened. You’ll see this week’s topics until it’s time to pick for next week.",
-        "We fixed an issue where changing or removing a topic for a future week could affect how earlier picks or scores appeared. Your past results stay as they were.",
+        "Fixed an issue where next week’s lineup changes could appear on the Play page before picks opened. You’ll see this week’s topics until it’s time to pick for next week.",
+        "Fixed an issue where changing or removing a topic for a future week could affect how earlier picks or scores appeared. Your past results stay as they were.",
       ] },
       { label: "Removed", items: [
         "The old Share recap option has been removed. You can share an image of your own weekly score card instead.",
@@ -77,9 +77,9 @@ const releases: Release[] = [
     title: "Scoring visibility fixes",
     groups: [
       { label: "Fixed", items: [
-        "We fixed an issue where a day’s points could appear on your score and the weekly leaderboard before the commissioner finished scoring that day.",
-        "We fixed an issue where a week’s points could appear in season rankings before that week’s scores were final.",
-        "We fixed an issue where score cards could show things that had happened that day before the commissioner finished scoring. Score cards now match the published totals.",
+        "Fixed an issue where a day’s points could appear on your score and the weekly leaderboard before the commissioner finished scoring that day.",
+        "Fixed an issue where a week’s points could appear in season rankings before that week’s scores were final.",
+        "Fixed an issue where score cards could show things that had happened that day before the commissioner finished scoring. Score cards now match the published totals.",
       ] },
       { label: "Improved", items: [
         "The Founding Member badge now has a blue gemstone icon.",
@@ -96,7 +96,7 @@ const releases: Release[] = [
         "Players who were signed up when the Founding Member badge launched received it, even if they hadn’t made picks yet.",
       ] },
       { label: "Fixed", items: [
-        "We fixed an issue where topic names could briefly change to “Retired option” while a player’s picks were loading.",
+        "Fixed an issue where topic names could briefly change to “Retired option” while a player’s picks were loading.",
       ] },
     ],
   },
