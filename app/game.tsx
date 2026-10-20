@@ -559,7 +559,7 @@ export default function Game() {
       </p>
       <div className="grid">
         <PersonalScores userId={user} revision={scoreRevision}
-          seasonRank={currentSeasonRank} seasonPlayers={seasonLeaders.length} weeklyPlayers={leaders.length} />
+          seasonRank={currentSeasonRank} seasonPlayers={seasonLeaders.length} />
         <div className="panel">
           <div className="muted">LINEUP STATUS</div>
           <h2 className={!loading && !locked ? "picks-open-heading" : undefined}>{loading ? "Checking lineup…" : locked ? "Locked" : "Open for picks"}</h2>
