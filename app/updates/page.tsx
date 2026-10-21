@@ -13,6 +13,12 @@ type Release = {
 // Keep newest releases first. Dates reflect releases in America/New_York.
 const releases: Release[] = [
   {
+    date: "2026-10-21",
+    groups: [{ label: "Added", items: [
+      "A new Stats page shows how the season is going: weekly score and scoring trends, topic counts, and an archive of completed weeks. Stats use finalized results, so scores in progress stay out of the archive.",
+    ] }],
+  },
+  {
     date: "2026-10-20",
     groups: [{ label: "Fixed", items: [
       "Fixed an issue where Your Weekly Score compared your rank with everyone who signed up. It now shows your place among players who submitted a complete lineup for that week, including on the score card you can share.",
