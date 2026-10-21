@@ -16,6 +16,8 @@ const releases: Release[] = [
     date: "2026-10-21",
     groups: [{ label: "Added", items: [
       "A new Stats page shows how the season is going: weekly score and scoring trends, topic counts, and an archive of completed weeks. Stats use finalized results, so scores in progress stay out of the archive.",
+    ] }, { label: "Fixed", items: [
+      "Fixed an issue where the Stats page could show an older topic’s occurrences under its newer name. Past weeks now keep the names used when those occurrences were scored, even if a topic is renamed or removed later.",
     ] }],
   },
   {

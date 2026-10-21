@@ -11,7 +11,7 @@ export type StatsWeek = {
   topScore: number;
   occurrences: number;
   scoredDays: number;
-  topics: { name: string; count: number; birthday: boolean }[];
+  topics: { id: string; name: string; count: number; birthday: boolean }[];
 };
 export type TopicTrend = {
   id: string;
@@ -126,7 +126,7 @@ export default function StatsDashboard({ weeks, topics, uniquePlayers }: {
               <span>Avg {week.averageScore} pts</span></summary>
             <div className="stats-week-details">
               <p className="muted">Top score: {week.topScore} pts · Total points awarded: {week.totalPoints} · {week.scoredDays} scored {week.scoredDays === 1 ? "day" : "days"}</p>
-              {week.topics.length ? <ul>{week.topics.map((topic) => <li key={topic.name}><span>{topic.name}{topic.birthday && <em> · birthday bonus</em>}</span><strong>{topic.count}</strong></li>)}</ul>
+              {week.topics.length ? <ul>{week.topics.map((topic) => <li key={topic.id}><span>{topic.name}{topic.birthday && <em> · birthday bonus</em>}</span><strong>{topic.count}</strong></li>)}</ul>
                 : <p>No occurrences were recorded this week.</p>}
             </div>
           </details>)}

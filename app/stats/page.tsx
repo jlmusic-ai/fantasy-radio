@@ -74,10 +74,13 @@ export default async function StatsPage() {
     const weekLines = lines.filter((row) => row.week_id === week_id);
     const totalPoints = weekScores.reduce((sum, row) => sum + Number(row.score), 0);
     const occurrences = weekLines.reduce((sum, row) => sum + row.quantity, 0);
-    const topics = new Map<string, { name: string; count: number; birthday: boolean }>();
+    const topics = new Map<string, { id: string; name: string; count: number; birthday: boolean }>();
     for (const line of weekLines) {
-      const current = topics.get(line.category_id);
-      topics.set(line.category_id, {
+      // A topic can be renamed during a season. Keep every scored name intact.
+      const key = JSON.stringify([line.category_id, line.topic_name]);
+      const current = topics.get(key);
+      topics.set(key, {
+        id: key,
         name: line.topic_name,
         count: (current?.count || 0) + line.quantity,
         birthday: line.scoring_type === "closest_guess",
@@ -97,15 +100,14 @@ export default async function StatsPage() {
 
   const trendMap = new Map<string, TopicTrend>();
   for (const line of lines) {
-    const current = trendMap.get(line.category_id) || {
-      id: line.category_id, name: line.topic_name,
+    const key = JSON.stringify([line.category_id, line.topic_name]);
+    const current = trendMap.get(key) || {
+      id: key, name: line.topic_name,
       birthday: line.scoring_type === "closest_guess", total: 0, weeks: {} as Record<string, number>,
     };
-    // The name comes from the week it was scored, not today's editable lineup.
-    current.name = line.topic_name;
     current.total += line.quantity;
     current.weeks[line.week_id] = (current.weeks[line.week_id] || 0) + line.quantity;
-    trendMap.set(line.category_id, current);
+    trendMap.set(key, current);
   }
 
   return <StatsDashboard weeks={weeks} topics={[...trendMap.values()]}
