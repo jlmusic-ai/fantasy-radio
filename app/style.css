@@ -952,7 +952,7 @@ table:has(.player-cell) td:last-child {
 .changelog-release-heading { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .changelog-release-heading time { color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; }
 .changelog-latest { color: #ffde68; background: #302700; border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px; font-size: 12px; }
-.changelog-release h2 { margin: 16px 0 24px; line-height: 1.3; }
+.changelog-release-heading + .changelog-group { margin-top: 18px; }
 .changelog-group + .changelog-group { margin-top: 24px; }
 .changelog-label { display: inline-block; margin: 0; padding: 4px 10px; border-radius: 6px; background: #252525; font-size: 14px; }
 .changelog-label-added { color: #9ee9b3; background: #14271a; }

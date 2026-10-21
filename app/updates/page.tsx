@@ -7,7 +7,6 @@ export const metadata = {
 
 type Release = {
   date: string;
-  title: string;
   groups: { label: string; items: string[] }[];
 };
 
@@ -15,28 +14,24 @@ type Release = {
 const releases: Release[] = [
   {
     date: "2026-10-20",
-    title: "Weekly rank counts active players",
     groups: [{ label: "Fixed", items: [
       "Fixed an issue where Your Weekly Score compared your rank with everyone who signed up. It now shows your place among players who submitted a complete lineup for that week, including on the score card you can share.",
     ] }],
   },
   {
     date: "2026-10-19",
-    title: "Lineup lock display",
     groups: [{ label: "Fixed", items: [
       "Fixed an issue where the Play page could briefly say picks were open after they had locked. It now says “Checking lineup…” until it knows whether you can make changes.",
     ] }],
   },
   {
     date: "2026-10-18",
-    title: "Commissioner access",
     groups: [{ label: "Added", items: [
       "Commissioners can now give another registered player commissioner access, or remove that access, from the Registered Users page. This lets someone else help manage the game when needed.",
     ] }],
   },
   {
     date: "2026-10-15",
-    title: "Email and site updates",
     groups: [{ label: "Improved", items: [
       "The Changelog page is now called Updates, so it’s easier to find what’s new.",
       "If a week ends early, the results email now clearly says that next week’s picks open Friday at 5 p.m. Eastern time.",
@@ -45,14 +40,12 @@ const releases: Release[] = [
   },
   {
     date: "2026-10-10",
-    title: "Password recovery fixes",
     groups: [{ label: "Fixed", items: [
       "Fixed an issue where password reset links could fail if you opened them in an email app or a different browser. You’ll also get a clearer message if a link has expired or has already been used.",
     ] }],
   },
   {
     date: "2026-10-09",
-    title: "Score sharing and lineup improvements",
     groups: [
       { label: "Added", items: [
         "You can now see your scores from earlier weeks, your season total, and your best week in one place.",
@@ -81,7 +74,6 @@ const releases: Release[] = [
   },
   {
     date: "2026-10-06",
-    title: "Scoring visibility fixes",
     groups: [
       { label: "Fixed", items: [
         "Fixed an issue where a day’s points could appear on your score and the weekly leaderboard before the commissioner finished scoring that day.",
@@ -95,7 +87,6 @@ const releases: Release[] = [
   },
   {
     date: "2026-10-05",
-    title: "Season 1: ranks and founding members",
     groups: [
       { label: "Added", items: [
         "Your weekly score card now shows where you stand for both the week and the season.",
@@ -116,12 +107,11 @@ export default function UpdatesPage() {
       <h1>Updates</h1>
       <p className="muted">See what’s new in Mooberball since Season 1 began on 10-05-2026. The newest changes are at the top.</p>
     </div>
-    {releases.map((release, index) => <article className="panel changelog-release" key={release.date} aria-labelledby={`release-${release.date}`}>
+    {releases.map((release, index) => <article className="panel changelog-release" key={release.date} aria-label={`Updates for ${formatDate(release.date)}`}>
       <div className="changelog-release-heading">
         <time dateTime={release.date}>{formatDate(release.date)}</time>
         {index === 0 && <span className="changelog-latest">Latest update</span>}
       </div>
-      <h2 id={`release-${release.date}`}>{release.title}</h2>
       {release.groups.map((group) => <section className="changelog-group" key={group.label}>
         <h3 className={`changelog-label changelog-label-${group.label.toLowerCase()}`}>{group.label}</h3>
         <ul>{group.items.map((item) => <li key={item}>{item}</li>)}</ul>
