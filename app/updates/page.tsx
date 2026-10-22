@@ -13,6 +13,12 @@ type Release = {
 // Keep newest releases first. Dates reflect releases in America/New_York.
 const releases: Release[] = [
   {
+    date: "2026-10-22",
+    groups: [{ label: "Added", items: [
+      "Weekly rivalries begin next week. After Monday's 6 a.m. pick lock, everyone with a complete lineup is paired with another active player. If the number of players is odd, one matchup has three players. Open Rivalries to see yours first and browse everyone else's. Rivalries don't change your leaderboard points.",
+    ] }],
+  },
+  {
     date: "2026-10-21",
     groups: [{ label: "Added", items: [
       "A new Stats page shows how the season is going: weekly score and scoring trends, topic counts, and an archive of completed weeks. Stats use finalized results, so scores in progress stay out of the archive.",

@@ -29,6 +29,7 @@ export default async function Layout({
           <nav>
             {user && <a href="/">Play</a>}
             {user && <a href="/stats">Stats</a>}
+            {user && <a href="/rivalries">Rivalries</a>}
             <a href="/rules">Rules</a>
             <a href="/updates">Updates</a>
             {isCommissioner && (

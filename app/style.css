@@ -1014,3 +1014,25 @@ table:has(.player-cell) td:last-child {
 .stats-week-details em{font-style:normal;color:#ffcf51}
 @media(max-width:760px){.stats-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.stats-charts{grid-template-columns:1fr}.stats-section-heading{display:grid}.stats-week summary{grid-template-columns:repeat(2,minmax(0,1fr))}.stats-topic-row{grid-template-columns:minmax(0,1fr) auto}.stats-topic-track{display:none}.stats-topic-count .muted{display:none}}
 @media(max-width:390px){.stats-chart-row{grid-template-columns:80px minmax(0,1fr) 36px;gap:6px;font-size:.75rem}.stats-week summary{gap:7px;font-size:.82rem}}
+.rivalries-page { max-width: 1160px; margin: 0 auto; }
+.rivalries-intro { text-align: center; margin: 0 auto 26px; }
+.rivalries-logo { width: min(100%, 540px); height: auto; display: block; margin: 0 auto 12px; }
+.rivalries-layout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, .8fr); gap: 20px; align-items: start; }
+.rivalry-feature h1 { margin: 8px 0; }
+.rivalry-players { display: grid; gap: 12px; margin: 24px 0; }
+.rivalry-player { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px; background: #171717; border: 1px solid var(--border); border-radius: 14px; }
+.rivalry-person { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.rivalry-avatar { width: 44px; height: 44px; object-fit: cover; border-radius: 50%; border: 2px solid var(--gold); flex: none; }
+.rivalry-initial { display: grid; place-items: center; background: #29230c; color: var(--gold); font-weight: bold; }
+.rivalry-name { overflow-wrap: anywhere; }
+.rivalry-name small, .rivalry-score small { color: #aaa; font-weight: normal; }
+.rivalry-score { color: var(--gold); font-size: 22px; flex: none; }
+.rivalry-result { font-weight: bold; color: var(--gold); margin-bottom: 0; }
+.rivalry-directory h2 { margin-top: 0; }
+.rivalry-list { max-height: 470px; overflow-y: auto; display: grid; gap: 8px; padding-right: 5px; scrollbar-color: var(--gold) #222; scrollbar-width: thin; }
+.rivalry-list-item { display: grid; gap: 4px; width: 100%; text-align: left; color: #eee; background: #191919; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; cursor: pointer; font: inherit; }
+.rivalry-list-item span:last-child { color: #bbb; font-size: 13px; overflow-wrap: anywhere; }
+.rivalry-list-item small { color: var(--gold); }
+.rivalry-list-item.selected, .rivalry-list-item:hover, .rivalry-list-item:focus-visible { border-color: var(--gold); }
+.rivalry-footnote { margin-top: 20px; }
+@media (max-width: 740px) { .rivalries-layout { grid-template-columns: 1fr; } }
