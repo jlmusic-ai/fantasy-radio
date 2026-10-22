@@ -60,8 +60,7 @@ export default async function Layout({
         </header>
         <main>{children}</main>
         <footer>
-          Mooberball is an independent fan-made game. Not affiliated with or
-          endorsed by the show or station.
+          Mooberball is a stupid, fun fan-made game. Not affiliated with or endorsed by the show or station at all. Happy Birthday, Bob.
         </footer>
       </body>
     </html>
