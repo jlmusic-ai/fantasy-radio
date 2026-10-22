@@ -11,7 +11,8 @@ export default async function Home() {
     data: { user },
   } = await db.auth.getUser();
 
-  if (user?.user_metadata?.welcome_photo_pending === true) redirect("/profile");
+  if (user?.user_metadata?.welcome_photo_pending === true ||
+      user?.user_metadata?.facebook_username_pending === true) redirect("/profile");
 
   return user
     ? <><PhotoReminder /><Game /></>

@@ -19,6 +19,8 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [welcome, setWelcome] = useState(false);
+  const [needsFacebookUsername, setNeedsFacebookUsername] = useState(false);
+  const [temporaryUsername, setTemporaryUsername] = useState("");
 
   useEffect(() => {
     async function loadProfile() {
@@ -34,6 +36,8 @@ export default function ProfilePage() {
       if (user.user_metadata?.welcome_photo_pending === true) {
         setWelcome(true);
       }
+      const facebookWelcome = user.user_metadata?.facebook_username_pending === true ||
+        new URLSearchParams(window.location.search).get("facebook") === "welcome";
       const { data, error } = await db
         .from("profiles")
         .select("username,avatar_url,founding_member")
@@ -42,6 +46,10 @@ export default function ProfilePage() {
       if (error) setProfileMessage(error.message);
       else {
         setUsername(data.username);
+        if (facebookWelcome) {
+          setNeedsFacebookUsername(true);
+          setTemporaryUsername(data.username);
+        }
         setFoundingMember(data.founding_member);
         if (data.avatar_url) {
           const { data: signed } = await db.storage
@@ -56,6 +64,7 @@ export default function ProfilePage() {
   }, []);
 
   async function finishWelcome() {
+    if (needsFacebookUsername) return false;
     const { error } = await db.auth.updateUser({ data: { welcome_photo_pending: false } });
     if (error) {
       setProfileMessage("We couldn't save your onboarding choice. Please try again.");
@@ -78,6 +87,10 @@ export default function ProfilePage() {
       setProfileMessage("Username must contain at least three characters.");
       return;
     }
+    if (needsFacebookUsername && cleanUsername === temporaryUsername) {
+      setProfileMessage("Choose a username to use on Mooberball.");
+      return;
+    }
     const { data, error } = await db
       .from("profiles")
       .update({ username: cleanUsername })
@@ -89,7 +102,19 @@ export default function ProfilePage() {
       return;
     }
     setUsername(data.username);
-    setProfileMessage("Profile saved. Your leaderboard name is now updated.");
+    if (needsFacebookUsername) {
+      const { error: onboardingError } = await db.auth.updateUser({
+        data: { facebook_username_pending: false },
+      });
+      if (onboardingError) {
+        setProfileMessage("Your username was saved, but we couldn't finish setup. Please save it again.");
+        return;
+      }
+      setNeedsFacebookUsername(false);
+      setProfileMessage("Username saved. Add a profile photo or skip it for now.");
+    } else {
+      setProfileMessage("Profile saved. Your leaderboard name is now updated.");
+    }
   }
 
   async function uploadPhoto(file?: File) {
@@ -180,7 +205,13 @@ export default function ProfilePage() {
 
   return (
     <>
-      {welcome && (
+      {needsFacebookUsername ? (
+        <div className="panel profile-welcome" role="status">
+          <h2>You're in - choose your Mooberball username!</h2>
+          <p>Save a username below. It will appear next to your picks and on the leaderboards.</p>
+          <a href="#profile-username">Choose username</a>
+        </div>
+      ) : welcome && (
         <div className="panel profile-welcome" role="status">
           <h2>You're in - now upload a profile photo!</h2>
           <p>Add a photo below so other Moobers can recognize you on the leaderboards.</p>
@@ -198,7 +229,7 @@ export default function ProfilePage() {
       <div className="profile-grid">
         <section className="panel">
           <h2>Public profile</h2>
-          <form onSubmit={saveProfile}>
+          <form id="profile-username" onSubmit={saveProfile}>
             <label>
               Username
               <input

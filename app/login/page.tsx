@@ -3,6 +3,7 @@
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { browserClient } from "../../lib/supabase";
+import FacebookSignIn from "../facebook-sign-in";
 
 // Supabase CAPTCHA protection requires a fresh Turnstile token for every login attempt.
 const TURNSTILE_SITE_KEY = "0x4AAAAAAE71CdgCBE-ygwBe";
@@ -101,6 +102,13 @@ export default function Login() {
   const [resendCooldown, setResendCooldown] = useState(0);
 
   useEffect(() => {
+    const reason = new URLSearchParams(window.location.search).get("facebook_error");
+    if (reason) setMessage(reason === "cancelled"
+      ? "Facebook sign-in was cancelled. You can try again."
+      : "Facebook sign-in didn't finish. Please try again.");
+  }, []);
+
+  useEffect(() => {
     if (resendCooldown <= 0) return;
     const timer = setTimeout(() => setResendCooldown((seconds) => seconds - 1), 1000);
     return () => clearTimeout(timer);
@@ -182,6 +190,7 @@ export default function Login() {
       {needsConfirmation && <button type="button" onClick={resendConfirmation} disabled={submitting || !captchaToken || resendCooldown > 0}>
         {resendCooldown > 0 ? `Resend available in ${resendCooldown}s` : "Resend confirmation email"}
       </button>}
+      <FacebookSignIn />
       <a href="/signup">Create an account</a>
     </div>
   );

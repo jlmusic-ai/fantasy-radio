@@ -3,6 +3,7 @@
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { browserClient } from "../../lib/supabase";
+import FacebookSignIn from "../facebook-sign-in";
 
 const TURNSTILE_SITE_KEY = "0x4AAAAAAE71CdgCBE-ygwBe";
 
@@ -170,6 +171,7 @@ export default function Signup() {
         <button disabled={submitting || !captchaToken} type="submit">{submitting ? "Creating account…" : "Create account"}</button>
       </form>
       <p aria-live="polite">{message}</p>
+      <FacebookSignIn signup />
     </div>
   );
 }
