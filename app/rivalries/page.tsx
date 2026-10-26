@@ -36,13 +36,30 @@ export default async function RivalriesPage() {
   const error = assignment.error || profiles.error || scores.error || weekRow.error || finalized.error || lineups.error;
   const profileById = new Map(((profiles.data || []) as Profile[]).map((profile) => [profile.id, profile]));
   const scoreById = new Map(((scores.data || []) as Score[]).map((score) => [score.user_id, Number(score.score)]));
+  // Profiles store private Storage paths, not browser-ready image URLs.
+  const avatarPaths = [...new Set(((assignment.data || []) as Assignment[])
+    .map((row) => profileById.get(row.user_id)?.avatar_url)
+    .filter((path): path is string => Boolean(path)))];
+  const avatarUrls = new Map<string, string>();
+  const signedBatches = await Promise.all(Array.from(
+    { length: Math.ceil(avatarPaths.length / 100) },
+    (_, index) => db.storage.from("avatars").createSignedUrls(
+      avatarPaths.slice(index * 100, index * 100 + 100), 3600,
+    ),
+  ));
+  for (const { data } of signedBatches) {
+    for (const item of data || []) {
+      if (item.path && item.signedUrl && !item.error) avatarUrls.set(item.path, item.signedUrl);
+    }
+  }
   const groups = new Map<number, RivalryPlayer[]>();
   for (const row of (assignment.data || []) as Assignment[]) {
     const profile = profileById.get(row.user_id);
     if (!profile) continue;
     const group = groups.get(row.rivalry_number) || [];
     group.push({ id: row.user_id, username: profile.username,
-      avatarUrl: profile.avatar_url, score: scoreById.get(row.user_id) || 0 });
+      avatarUrl: profile.avatar_url ? avatarUrls.get(profile.avatar_url) || null : null,
+      score: scoreById.get(row.user_id) || 0 });
     groups.set(row.rivalry_number, group);
   }
 
