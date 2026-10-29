@@ -1,7 +1,9 @@
 import Image from "next/image";
 import { redirect } from "next/navigation";
-import { defaultLockAt, formatDate, weekStart } from "../../lib/game";
+import { defaultLockAt, formatDate, weekStart, FIRST_SEASON_START, FIRST_SEASON_END } from "../../lib/game";
 import { serverClient } from "../../lib/server";
+import { loadRivalryStats } from "../../lib/rivalry-stats";
+import RivalryStatistics from "./rivalry-statistics";
 import RivalriesBoard, { type RivalryPlayer } from "./rivalries-board";
 
 export const metadata = {
@@ -19,7 +21,7 @@ export default async function RivalriesPage() {
   if (!user) redirect("/login");
 
   const week = weekStart(new Date());
-  const [assignment, profiles, scores, weekRow, finalized, lineups] = await Promise.all([
+  const [assignment, profiles, scores, weekRow, finalized, lineups, statistics] = await Promise.all([
     db.from("weekly_rivalries").select("user_id,rivalry_number")
       .eq("week_id", week).order("rivalry_number").limit(1000),
     db.from("profiles").select("id,username,avatar_url")
@@ -31,6 +33,9 @@ export default async function RivalriesPage() {
       .eq("week_id", week).maybeSingle(),
     db.from("lineup_status_totals").select("user_id")
       .eq("week_id", week).eq("allocated_points", 100).limit(1000),
+    loadRivalryStats(db, FIRST_SEASON_START, FIRST_SEASON_END)
+      .then((records) => ({ records, error: false }))
+      .catch(() => ({ records: [], error: true })),
   ]);
 
   const error = assignment.error || profiles.error || scores.error || weekRow.error || finalized.error || lineups.error;
@@ -89,6 +94,11 @@ export default async function RivalriesPage() {
             ? "The matchups are being assigned from players whose 100-point picks were in on time. Check back shortly."
             : "Finish your 100-point lineup before Monday at 6 a.m. Eastern to join this week's rivalries. Your matchup will appear here once picks lock."}</p>
         </div>}
+    <RivalryStatistics viewerId={user.id} error={statistics.error || Boolean(profiles.error)}
+      records={statistics.records.flatMap((record) => {
+        const profile = profileById.get(record.userId);
+        return profile ? [{ ...record, username: profile.username }] : [];
+      })} />
     <p className="muted rivalry-footnote">Rivalries are for fun and don't change leaderboard points. Scores update as each day's scoring is completed.</p>
   </div>;
 }

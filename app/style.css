@@ -1037,3 +1037,23 @@ table:has(.player-cell) td:last-child {
 .rivalry-list-item.selected, .rivalry-list-item:hover, .rivalry-list-item:focus-visible { border-color: var(--gold); }
 .rivalry-footnote { margin-top: 20px; }
 @media (max-width: 740px) { .rivalries-layout { grid-template-columns: 1fr; } }
+
+.rivalry-statistics { margin-top: 28px; }
+.rivalry-stats-heading h2 { margin-bottom: 6px; }
+.rivalry-statistics h3 { margin-top: 0; }
+.rivalry-record, .rivalry-wins-leader { color: var(--gold); font-weight: bold; }
+.rivalry-stat-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 22px 0; }
+.rivalry-stat-card { border: 1px solid var(--border); border-radius: 12px; padding: 16px; background: #171717; }
+.rivalry-stat-card dt { color: #bbb; font-size: 14px; }
+.rivalry-stat-card dd { margin: 10px 0 0; color: var(--gold); font-size: 30px; font-weight: bold; overflow-wrap: anywhere; }
+.rivalry-stats-table-wrap { max-width: 100%; max-height: 480px; overflow: auto; scrollbar-color: var(--gold) #222; scrollbar-width: thin; }
+.rivalry-stats-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.rivalry-stats-table caption { text-align: left; color: #bbb; padding: 0 0 14px; }
+.rivalry-stats-table th, .rivalry-stats-table td { text-align: left; padding: 12px 10px; border-bottom: 1px solid var(--border); }
+.rivalry-stats-table thead th { position: sticky; top: 0; z-index: 1; background: #151515; color: #bbb; font-weight: normal; white-space: nowrap; }
+.rivalry-stats-table tbody th { min-width: 140px; overflow-wrap: anywhere; }
+.rivalry-stats-table td { white-space: nowrap; }
+.rivalry-stats-table tbody small { color: var(--gold); white-space: nowrap; }
+.rivalry-stats-you { background: #28220c; }
+.rivalry-stats-note { line-height: 1.6; }
+@media (max-width: 600px) { .rivalry-stat-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
