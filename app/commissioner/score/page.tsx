@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { browserClient } from "../../../lib/supabase";
 import { defaultLockAt, formatDate, pickingWeek, weekStart } from "../../../lib/game";
 
@@ -15,6 +15,11 @@ export default function ScoreThisWeek() {
   const db = browserClient();
   const [allowed, setAllowed] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [otherDayTotals, setOtherDayTotals] = useState<Record<string, number>>({});
+  const [selectedDate, setSelectedDate] = useState("");
+  const [loadedDate, setLoadedDate] = useState("");
+  const loadRequest = useRef(0);
+  const mutationPending = useRef(false);
   const [totals, setTotals] = useState<Record<string, number>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<string | null>(null);
@@ -33,6 +38,9 @@ export default function ScoreThisWeek() {
   const easternDay = new Intl.DateTimeFormat("sv-SE", {
     timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
   }).format(new Date(now));
+  const scoringDate = selectedDate >= week && selectedDate <= easternDay ? selectedDate : easternDay;
+  const loading = loadedDate !== scoringDate;
+  const busy = loading || Boolean(saving) || finalizing || dailySaving || noteSaving;
   const canFinalize = pickingWeek(new Date(now)) > week;
   const canCloseEarly = !canFinalize && now >= new Date(lockAt || defaultLockAt(week)).getTime();
   const hasUnsavedTotals = categories.some((category) =>
@@ -40,6 +48,8 @@ export default function ScoreThisWeek() {
   );
 
   async function load() {
+    const request = ++loadRequest.current;
+    setLoadedDate("");
     const {
       data: { user },
     } = await db.auth.getUser();
@@ -50,10 +60,10 @@ export default function ScoreThisWeek() {
       .select("is_commissioner")
       .eq("id", user.id)
       .single();
-    if (!profile?.is_commissioner) return;
+    if (request !== loadRequest.current || !profile?.is_commissioner) return;
     setAllowed(true);
 
-    const [categoryResult, eventResult, finalizationResult, dailyStatusResult, weekResult, noteResult] = await Promise.all([
+    const [categoryResult, eventResult, finalizationResult, dailyStatusResult, weekResult] = await Promise.all([
       db
         .from("categories")
         .select("id,name,display_order,scoring_type")
@@ -62,34 +72,45 @@ export default function ScoreThisWeek() {
         .order("name"),
       db
         .from("events")
-        .select("category_id,quantity")
+        .select("category_id,quantity,occurred_at")
         .eq("week_id", week),
       db.from("finalized_weeks").select("scores_finalized_at")
         .eq("week_id", week).maybeSingle(),
-      db.rpc("today_scoring_status").single(),
+      db.from("daily_scoring_status").select("completed_at,commissioner_note")
+        .eq("scoring_date", scoringDate).maybeSingle(),
       db.from("weeks").select("lock_at").eq("id", week).maybeSingle(),
-      db.from("daily_scoring_status").select("commissioner_note")
-        .eq("scoring_date", easternDay).maybeSingle(),
     ]);
 
+    if (request !== loadRequest.current) return;
+    const loadError = [categoryResult, eventResult, finalizationResult, dailyStatusResult, weekResult].find((result) => result.error)?.error;
+    if (loadError) {
+      setMessage("Unable to load this show's scoring. Refresh the page to try again.");
+      return;
+    }
     const nextCategories = ((categoryResult.data || []) as Category[]).sort((a, b) =>
       Number(a.scoring_type === "closest_guess") - Number(b.scoring_type === "closest_guess"),
     );
     const nextTotals: Record<string, number> = {};
-    (eventResult.data || []).forEach((event) => {
-      nextTotals[event.category_id] =
-        (nextTotals[event.category_id] || 0) + event.quantity;
+    const otherTotals: Record<string, number> = {};
+    const dateFormat = new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
     });
+    (eventResult.data || []).forEach((event) => {
+      const target = dateFormat.format(new Date(event.occurred_at)) === scoringDate ? nextTotals : otherTotals;
+      target[event.category_id] = (target[event.category_id] || 0) + event.quantity;
+    });
+    setOtherDayTotals(otherTotals);
     setCategories(nextCategories);
     setFinalized(Boolean(finalizationResult.data?.scores_finalized_at));
     setLockAt(weekResult.data?.lock_at || null);
     setDailyComplete(
-      Boolean((dailyStatusResult.data as { completed?: boolean } | null)?.completed),
+      Boolean(dailyStatusResult.data?.completed_at),
     );
-    const note = noteResult.data?.commissioner_note || "";
+    const note = dailyStatusResult.data?.commissioner_note || "";
     setDailyNote(note);
     setSavedDailyNote(note);
     setTotals(nextTotals);
+    setLoadedDate(scoringDate);
     setDrafts(
       Object.fromEntries(
         nextCategories.map((category) => [
@@ -103,22 +124,27 @@ export default function ScoreThisWeek() {
   useEffect(() => {
     void load();
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
-    return () => window.clearInterval(timer);
-  }, [week, easternDay]);
+    return () => {
+      loadRequest.current++;
+      window.clearInterval(timer);
+    };
+  }, [week, scoringDate]);
 
   async function updateTotal(
     categoryId: string,
     change: { delta: number } | { target: number },
   ) {
-    if (finalized || finalizing || dailyComplete) return;
+    if (busy || mutationPending.current || finalized || dailyComplete) return;
+    mutationPending.current = true;
     setSaving(categoryId);
     setMessage("");
-    const { data, error } = await db.rpc("adjust_weekly_occurrences", {
-      p_week: week,
+    const { data, error } = await db.rpc("adjust_show_occurrences", {
+      p_scoring_date: scoringDate,
       p_category_id: categoryId,
       p_delta: "delta" in change ? change.delta : null,
       p_target: "target" in change ? change.target : null,
     });
+    mutationPending.current = false;
     setSaving(null);
     if (error) {
       setMessage(error.message);
@@ -138,7 +164,7 @@ export default function ScoreThisWeek() {
   }
 
   function saveDraft(categoryId: string) {
-    if (finalized || finalizing || dailyComplete) return;
+    if (busy || mutationPending.current || finalized || dailyComplete) return;
     const value = Number(drafts[categoryId]);
     if (!Number.isInteger(value) || value < 0 || value > 5000) {
       setMessage("Enter a whole number between 0 and 5000.");
@@ -154,15 +180,18 @@ export default function ScoreThisWeek() {
   }
 
   async function toggleDailyScoring() {
-    if (dailySaving) return;
+    if (busy || mutationPending.current || finalized || hasUnsavedTotals) return;
+    mutationPending.current = true;
     setDailySaving(true);
     setDailyMessage("");
     const nextComplete = !dailyComplete;
     const { error } = nextComplete
-      ? await db.rpc("save_today_scoring_note", {
+      ? await db.rpc("save_show_scoring_note", {
+          p_scoring_date: scoringDate,
           p_note: dailyNote.trim(), p_mark_complete: true,
         })
-      : await db.rpc("set_today_scoring_complete", { p_complete: false });
+      : await db.rpc("set_show_scoring_complete", { p_scoring_date: scoringDate, p_complete: false });
+    mutationPending.current = false;
     setDailySaving(false);
     if (error) {
       setDailyMessage(error.message);
@@ -173,17 +202,21 @@ export default function ScoreThisWeek() {
     if (nextComplete) setSavedDailyNote(dailyNote.trim());
     setDailyMessage(
       nextComplete
-        ? "Today’s scoring is now marked complete."
-        : "Today’s scoring is now marked incomplete.",
+        ? `Scoring for ${formatDate(scoringDate)} is now marked complete.`
+        : `Scoring for ${formatDate(scoringDate)} is now marked incomplete.`,
     );
   }
 
   async function saveDailyNote() {
-    if (!dailyComplete || noteSaving || finalized) return;
+    if (!dailyComplete || busy || mutationPending.current || finalized) return;
+    mutationPending.current = true;
     setNoteSaving(true);
     setDailyMessage("");
     const note = dailyNote.trim();
-    const { error } = await db.rpc("save_today_scoring_note", { p_note: note });
+    const { error } = await db.rpc("save_show_scoring_note", {
+      p_scoring_date: scoringDate, p_note: note,
+    });
+    mutationPending.current = false;
     setNoteSaving(false);
     if (error) {
       setDailyMessage(error.message);
@@ -195,7 +228,7 @@ export default function ScoreThisWeek() {
   }
 
   async function finalizeScores(early = false) {
-    if (!(early ? canCloseEarly : canFinalize) || finalized || finalizing || saving || hasUnsavedTotals) return;
+    if (!(early ? canCloseEarly : canFinalize) || finalized || busy || mutationPending.current || hasUnsavedTotals) return;
     const warning = early
       ? "Close this broadcast week early and award birthday bonuses now? All occurrence totals and weekly scores will be frozen. You cannot undo this. Next week’s picks will still open Friday at 5:00 p.m. Eastern."
       : "Finalize this week’s scores and award the birthday bonus? You won’t be able to edit these totals afterward.";
@@ -236,16 +269,30 @@ export default function ScoreThisWeek() {
       <h1>Score this week</h1>
       <p className="muted">
         Week beginning {formatDate(week)}. Tap plus or minus as moments happen,
-        or enter the weekly total directly. Changes are recorded for today;
-        completed days keep their own counts.
+        or enter the count for the selected show directly. Each date keeps its own
+        counts, notes, and completion status.
       </p>
       <section className="panel">
-        <h2>Today’s scoring status</h2>
+        <label htmlFor="scoring-show-date">Date of show being scored (Eastern)</label>
+        <input id="scoring-show-date" type="date" value={scoringDate}
+          min={week} max={easternDay} disabled={busy}
+          onChange={(event) => {
+            if (mutationPending.current) return;
+            const date = event.target.value;
+            if (!date || date < week || date > easternDay) return;
+            if ((hasUnsavedTotals || dailyNote.trim() !== savedDailyNote) &&
+              !window.confirm("Discard unsaved changes and switch show dates?")) return;
+            setSelectedDate(date);
+            setLoadedDate("");
+            setDailyMessage("");
+            setMessage("");
+          }} />
+        <p className="muted">Choose today or an earlier date this week to catch up on a missed broadcast.</p>
+        <h2>Scoring for {formatDate(scoringDate)}</h2>
         <p className="muted">
-          Mark today complete after you have finished scoring the podcast.
+          Mark the selected show complete after you have finished scoring the podcast.
           The completed day and its topic counts appear in the scoring log.
-          Undo completion before making a correction. A new day
-          automatically starts as incomplete at midnight Eastern.
+          Undo completion before making a correction. Each date starts incomplete until you finish scoring it.
         </p>
         <div
           className={`daily-scoring-status ${
@@ -254,34 +301,34 @@ export default function ScoreThisWeek() {
           role="status"
         >
           <strong>
-            {finalized
+            {loading ? "Loading this show’s scoring…" : finalized
               ? "This week’s scores are final."
               : dailyComplete
-              ? "Today’s scoring is complete."
-              : "Today’s scoring has not yet been completed."}
+              ? "This show’s scoring is complete."
+              : "This show’s scoring has not yet been completed."}
           </strong>
         </div>
-        <label htmlFor="commissioner-daily-note">Commissioner Notes for Today</label>
+        <label htmlFor="commissioner-daily-note">Commissioner Notes for {formatDate(scoringDate)}</label>
         <textarea
           id="commissioner-daily-note"
           rows={4}
           maxLength={2000}
           value={dailyNote}
-          disabled={dailySaving || noteSaving || finalized}
+          disabled={busy || finalized}
           onChange={(event) => setDailyNote(event.target.value)}
-          placeholder="Add context for today's completed scoring (optional)."
+          placeholder="Add context for this show’s scoring (optional)."
         />
-        <p className="muted">Visible with today&apos;s counts in the scoring log once you mark the day complete.</p>
+        <p className="muted">Visible with the selected show&apos;s counts in the scoring log once you mark the day complete.</p>
         {dailyComplete && !finalized && (
           <button type="button" className="secondary-button"
-            disabled={dailySaving || noteSaving || dailyNote.trim() === savedDailyNote}
+            disabled={busy || dailyNote.trim() === savedDailyNote}
             onClick={() => void saveDailyNote()}>
             {noteSaving ? "Saving note…" : "Save note"}
           </button>
         )}
         <button
           type="button"
-          disabled={dailySaving || noteSaving || finalized}
+          disabled={busy || finalized || hasUnsavedTotals}
           onClick={() => void toggleDailyScoring()}
         >
           {finalized
@@ -289,8 +336,8 @@ export default function ScoreThisWeek() {
             : dailySaving
             ? "Updating…"
             : dailyComplete
-              ? "Undo: mark today incomplete"
-              : "Mark today’s scoring complete"}
+              ? "Undo: mark this show incomplete"
+              : "Mark this show’s scoring complete"}
         </button>
         {dailyMessage && (
           <p className={dailyMessage.includes("now marked") || dailyMessage === "Commissioner note saved." ? "success" : "error"}>
@@ -298,34 +345,33 @@ export default function ScoreThisWeek() {
           </p>
         )}
       </section>
-      {categories.map((category) => {
-        const busy = saving === category.id;
-        return (
+      {categories.map((category) => (
           <div className="panel score-topic" key={category.id}>
             <h2>{category.name}</h2>
             {category.scoring_type === "closest_guess" && (
               <p className="muted">Birthday bonus · Record wishes here. Bonus points are awarded only when you finalize the week.</p>
             )}
+            <p className="muted">Show count for {formatDate(scoringDate)} · Weekly total: {(otherDayTotals[category.id] || 0) + (totals[category.id] || 0)}</p>
             <div className="score-controls">
               <button
                 className="score-step"
                 type="button"
                 aria-label={`Subtract one from ${category.name}`}
-                disabled={busy || finalizing || finalized || dailyComplete || (totals[category.id] || 0) === 0}
+                disabled={busy || finalized || dailyComplete || (totals[category.id] || 0) === 0}
                 onClick={() => updateTotal(category.id, { delta: -1 })}
               >
                 −
               </button>
               <input
                 className="score-total"
-                aria-label={`Total occurrences for ${category.name}`}
+                aria-label={`Occurrences on ${formatDate(scoringDate)} for ${category.name}`}
                 inputMode="numeric"
                 type="number"
                 min="0"
                 max="5000"
                 step="1"
                 value={drafts[category.id] ?? "0"}
-                disabled={busy || finalizing || finalized || dailyComplete}
+                disabled={busy || finalized || dailyComplete}
                 onChange={(event) =>
                   setDrafts((current) => ({
                     ...current,
@@ -341,15 +387,14 @@ export default function ScoreThisWeek() {
                 className="score-step"
                 type="button"
                 aria-label={`Add one to ${category.name}`}
-                disabled={busy || finalizing || finalized || dailyComplete}
+                disabled={busy || finalized || dailyComplete}
                 onClick={() => updateTotal(category.id, { delta: 1 })}
               >
                 +
               </button>
             </div>
           </div>
-        );
-      })}
+      ))}
       <section className="panel">
         <h2>Finalize scores</h2>
         <p className="muted">
@@ -363,13 +408,13 @@ export default function ScoreThisWeek() {
           <p className="success">This week’s scores are finalized. Birthday bonuses are included.</p>
         ) : (
           <div className="score-finalize-actions">
-            <button type="button" disabled={!canFinalize || finalizing || Boolean(saving) || hasUnsavedTotals}
+            <button type="button" disabled={!canFinalize || busy || hasUnsavedTotals}
               onClick={() => void finalizeScores()}>
               {finalizing ? "Finalizing…" : "Finalize scores and award birthday bonus"}
             </button>
             {!canFinalize && (
               <button type="button" className="secondary-button"
-                disabled={!canCloseEarly || finalizing || Boolean(saving) || hasUnsavedTotals}
+                disabled={!canCloseEarly || busy || hasUnsavedTotals}
                 onClick={() => void finalizeScores(true)}>
                 {finalizing ? "Closing week…" : "Close this week early and award bonus"}
               </button>
