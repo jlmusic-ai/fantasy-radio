@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 export type RivalryPlayer = {
   id: string;
@@ -50,7 +50,17 @@ export default function RivalriesBoard({ groups, viewerId, finalized }: {
           aria-pressed={group.number === active.number}
           onClick={() => setSelected(group.number)}>
           <span>#{group.number}{mine?.number === group.number && <small> · Yours</small>}</span>
-          <span>{group.players.map((player) => player.username).join(" · ")}</span>
+          <span>{group.players.map((player, index) => {
+            const winner = finalized && group.players.length > 1 && group.players.every(
+              (opponent) => opponent.id === player.id || player.score > opponent.score,
+            );
+            return <Fragment key={player.id}>
+              {index > 0 && " · "}
+              {winner
+                ? <strong style={{ color: "#82e3a2" }} title="Rivalry winner">{player.username}</strong>
+                : player.username}
+            </Fragment>;
+          })}</span>
         </button>)}
       </div>
     </aside>
