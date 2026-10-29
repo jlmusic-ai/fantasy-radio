@@ -1587,3 +1587,34 @@ end
 $function$;
 revoke all on function public.save_show_scoring_note(date, text, boolean) from public, anon;
 grant execute on function public.save_show_scoring_note(date, text, boolean) to authenticated;
+
+-- Episode titles are display metadata; occurrence counts and historical scores stay frozen.
+alter table public.daily_scoring_status
+  add column if not exists podcast_episode_title text
+  check (podcast_episode_title is null or char_length(podcast_episode_title) between 1 and 500);
+
+-- Commissioners may change only this display column through the invoker RPC.
+grant update(podcast_episode_title) on public.daily_scoring_status to authenticated;
+create policy daily_scoring_episode_title_commissioner
+  on public.daily_scoring_status for update to authenticated
+  using (public.is_commissioner()) with check (public.is_commissioner());
+
+create or replace function public.complete_show_with_episode(
+  p_scoring_date date,p_note text,p_episode_title text default null
+)
+returns void language plpgsql security invoker set search_path=''
+as $function$
+begin
+  if auth.uid() is null or not public.is_commissioner() then
+    raise exception 'Commissioner access required' using errcode='42501';
+  end if;
+  -- Completion, counts, note, and title are committed together. Existing RPC
+  -- enforces the selected week/date and shares the weekly finalization lock.
+  perform public.save_show_scoring_note(p_scoring_date,p_note,true);
+  update public.daily_scoring_status
+    set podcast_episode_title=coalesce(nullif(pg_catalog.btrim(p_episode_title),''),podcast_episode_title)
+    where scoring_date=p_scoring_date;
+end
+$function$;
+revoke all on function public.complete_show_with_episode(date,text,text) from public,anon;
+grant execute on function public.complete_show_with_episode(date,text,text) to authenticated;

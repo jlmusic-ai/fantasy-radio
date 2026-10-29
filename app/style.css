@@ -879,7 +879,8 @@ table:has(.player-cell) td:last-child {
   background: #111;
 }
 .scoring-day-heading { flex-wrap: wrap; }
-.scoring-day-heading h3 { margin: 0; color: var(--gold); }
+.scoring-day-heading h3 { margin: 0; color: var(--gold); flex: 1 1 280px; min-width: 0; overflow-wrap: anywhere; }
+.scoring-episode-title { color: #fff; font-weight: 500; }
 .scoring-day-complete { color: #80dfac; font-size: 13px; font-weight: 700; }
 .scoring-day-note {
   margin: 14px 0;
