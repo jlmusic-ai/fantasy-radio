@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { browserClient } from "../lib/supabase";
 import { formatDate } from "../lib/game";
 
-type CompletedDay = { scoring_date: string; week_id: string; commissioner_note: string };
+type CompletedDay = { scoring_date: string; week_id: string; commissioner_note: string; podcast_episode_title: string | null };
 type DailyLine = {
   scoring_date: string;
   category_id: string;
@@ -28,7 +28,7 @@ export default function ScoringLog({ currentWeek }: { currentWeek: string }) {
     async function refresh() {
       const [completed, counts] = await Promise.all([
         db.from("daily_scoring_status")
-          .select("scoring_date,week_id,commissioner_note")
+          .select("scoring_date,week_id,commissioner_note,podcast_episode_title")
           .order("scoring_date", { ascending: false })
           .limit(500),
         db.from("daily_scoring_lines")
@@ -93,7 +93,9 @@ export default function ScoringLog({ currentWeek }: { currentWeek: string }) {
         return (
           <section className="scoring-day" key={day.scoring_date}>
             <div className="row scoring-day-heading">
-              <h3>{formatDate(day.scoring_date)}</h3>
+              <h3>{formatDate(day.scoring_date)}{day.podcast_episode_title && (
+                <span className="scoring-episode-title"> · {day.podcast_episode_title}</span>
+              )}</h3>
               <span className="scoring-day-complete">✓ Scoring complete</span>
             </div>
             {dayLines.length === 0 && <p className="muted">No qualifying occurrences recorded.</p>}

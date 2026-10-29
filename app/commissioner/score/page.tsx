@@ -185,12 +185,24 @@ export default function ScoreThisWeek() {
     setDailySaving(true);
     setDailyMessage("");
     const nextComplete = !dailyComplete;
-    const { error } = nextComplete
-      ? await db.rpc("save_show_scoring_note", {
-          p_scoring_date: scoringDate,
-          p_note: dailyNote.trim(), p_mark_complete: true,
-        })
-      : await db.rpc("set_show_scoring_complete", { p_scoring_date: scoringDate, p_complete: false });
+    let error: { message: string } | null = null;
+    let episodeTitle: string | null = null;
+    try {
+      if (nextComplete) {
+        const response = await fetch("/api/commissioner/daily-scoring", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scoringDate, note: dailyNote.trim() }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Unable to complete this show's scoring");
+        episodeTitle = result.episodeTitle;
+      } else {
+        const result = await db.rpc("set_show_scoring_complete", { p_scoring_date: scoringDate, p_complete: false });
+        error = result.error;
+      }
+    } catch (caught) {
+      error = { message: caught instanceof Error ? caught.message : "Unable to complete this show's scoring" };
+    }
     mutationPending.current = false;
     setDailySaving(false);
     if (error) {
@@ -202,7 +214,7 @@ export default function ScoreThisWeek() {
     if (nextComplete) setSavedDailyNote(dailyNote.trim());
     setDailyMessage(
       nextComplete
-        ? `Scoring for ${formatDate(scoringDate)} is now marked complete.`
+        ? `Scoring for ${formatDate(scoringDate)} is now marked complete.${episodeTitle ? ` Episode: ${episodeTitle}` : " No matching episode title was available from the RSS feed."}`
         : `Scoring for ${formatDate(scoringDate)} is now marked incomplete.`,
     );
   }

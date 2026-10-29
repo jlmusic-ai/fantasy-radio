@@ -7,6 +7,14 @@ const hooks = [];
 let cursor = 0, dirty = true, tree;
 const effects = [];
 const rpcCalls = [];
+const completionRequests = [];
+const originalFetch = global.fetch;
+global.fetch = async (_url, options) => {
+  const body = JSON.parse(options.body);
+  completionRequests.push(body);
+  status.set(body.scoringDate, { commissioner_note: body.note, completed_at: "2026-11-04T17:00:00Z" });
+  return Response.json({ completed: true, episodeTitle: "Tuesday episode" });
+};
 const events = [
   { category_id: 'topic', quantity: 5, occurred_at: '2026-11-02T17:00:00Z' },
   { category_id: 'topic', quantity: 2, occurred_at: '2026-11-03T17:00:00Z' },
@@ -112,8 +120,7 @@ const dateInput = () => find(n => n.props?.id === 'scoring-show-date');
   assert.equal(rpcCalls.at(-1).args.p_scoring_date, '2026-11-03');
   const complete = find(n => n.type === 'button' && n.props.children === 'Mark this show’s scoring complete');
   await complete.props.onClick(); await settle();
-  assert.equal(rpcCalls.at(-1).name, 'save_show_scoring_note');
-  assert.equal(rpcCalls.at(-1).args.p_scoring_date, '2026-11-03');
+  assert.equal(completionRequests.at(-1).scoringDate, '2026-11-03');
   assert.equal(input().props.disabled, true, 'Completed selected show must lock');
   dateInput().props.onChange({ target: { value: '2026-11-04' } });
   await settle();
@@ -124,4 +131,4 @@ const dateInput = () => find(n => n.props?.id === 'scoring-show-date');
   dateInput().props.onChange({ target: { value: '2026-10-30' } }); await settle();
   assert.equal(dateInput().props.value, '2026-11-04', 'Previous-week dates must be rejected');
   console.log('PASS: Wednesday catch-up for Election Day, separate counts/completion, date bounds, and selected-date RPCs.');
-})().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => { Date.now = originalNow; });
+})().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => { Date.now = originalNow; global.fetch = originalFetch; });
