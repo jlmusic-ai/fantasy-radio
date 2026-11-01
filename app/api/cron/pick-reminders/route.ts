@@ -125,6 +125,21 @@ async function loadUsers(secret: string): Promise<AuthUser[]> {
   }
 }
 
+// Read all matching rows so a complete lineup cannot be missed at the API row cap.
+async function loadIds(path: string, key: "id" | "user_id", secret: string): Promise<Set<string>> {
+  const ids = new Set<string>();
+  for (let offset = 0; ; offset += 1000) {
+    const response = await supabaseRequest(`${path}&order=${key}&offset=${offset}&limit=1000`, secret);
+    if (!response.ok) throw new Error("Unable to check reminder eligibility");
+    const rows = await response.json() as Record<string, unknown>[];
+    if (!Array.isArray(rows) || rows.some((row) => typeof row[key] !== "string")) {
+      throw new Error("Invalid reminder eligibility response");
+    }
+    rows.forEach((row) => ids.add(row[key] as string));
+    if (rows.length < 1000) return ids;
+  }
+}
+
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret || request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
@@ -150,15 +165,16 @@ export async function GET(request: Request) {
   }
 
   const weekId = nextMonday(parts);
-  const [usersResult, completeResponse] = await Promise.allSettled([
+  const [usersResult, completeResult, visibleResult] = await Promise.allSettled([
     loadUsers(supabaseSecret),
-    supabaseRequest(
+    loadIds(
       `/rest/v1/weekly_lineup_status?week_id=eq.${weekId}&allocated_points=eq.100&select=user_id`,
-      supabaseSecret,
+      "user_id", supabaseSecret,
     ),
+    loadIds("/rest/v1/profiles?hide_from_leaderboards=eq.false&select=id", "id", supabaseSecret),
   ]);
 
-  if (usersResult.status !== "fulfilled" || completeResponse.status !== "fulfilled" || !completeResponse.value.ok) {
+  if (usersResult.status !== "fulfilled" || completeResult.status !== "fulfilled" || visibleResult.status !== "fulfilled") {
     return Response.json(
       { error: "Unable to load reminder recipients" },
       { status: 502 },
@@ -167,12 +183,13 @@ export async function GET(request: Request) {
 
   const users = usersResult.value;
   const optedOut = await optedOutUsers(supabaseSecret);
-  const completeRows = (await completeResponse.value.json()) as { user_id: string }[];
-  const completeUsers = new Set(completeRows.map((row) => row.user_id));
+  const completeUsers = completeResult.value;
+  const visiblePlayers = visibleResult.value;
   const recipients = users
     .filter(
       (user): user is AuthUser & { email: string } =>
         Boolean(user.email && user.email_confirmed_at) &&
+        visiblePlayers.has(user.id) &&
         !optedOut.has(user.id) &&
         !completeUsers.has(user.id),
     )
@@ -208,10 +225,31 @@ export async function GET(request: Request) {
   const claimedIds = new Set(claimed.map((row) => row.user_id));
   const toSend = recipients.filter((recipient) => claimedIds.has(recipient.id));
   let sent = 0;
+  let skippedSubmitted = 0;
   const failures: string[] = [];
 
   for (let index = 0; index < toSend.length; index += 100) {
-    const batch = toSend.slice(index, index + 100);
+    const candidates = toSend.slice(index, index + 100);
+    let completedNow: Set<string>;
+    try {
+      // Recheck the actual target week immediately before contacting the mail
+      // provider. A player may have submitted since the initial recipient scan.
+      const ids = candidates.map((recipient) => recipient.id).join(",");
+      completedNow = await loadIds(
+        `/rest/v1/weekly_lineup_status?week_id=eq.${weekId}&allocated_points=eq.100&user_id=in.(${ids})&select=user_id`,
+        "user_id", supabaseSecret,
+      );
+    } catch {
+      // If eligibility cannot be verified, send nothing from this batch.
+      failures.push(...candidates.map((recipient) => recipient.id));
+      await releaseClaims(weekId, candidates, supabaseSecret);
+      continue;
+    }
+    const completed = candidates.filter((recipient) => completedNow.has(recipient.id));
+    skippedSubmitted += completed.length;
+    await releaseClaims(weekId, completed, supabaseSecret);
+    const batch = candidates.filter((recipient) => !completedNow.has(recipient.id));
+    if (!batch.length) continue;
     const resendResponse = await fetch("https://api.resend.com/emails/batch", {
       method: "POST",
       headers: {
@@ -257,5 +295,6 @@ export async function GET(request: Request) {
     eligible: recipients.length,
     sent,
     failed: failures.length,
+    skippedSubmitted,
   });
 }
