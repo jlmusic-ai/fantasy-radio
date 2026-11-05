@@ -9,11 +9,6 @@ struct GameView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if browser.loading {
-                    ProgressView("Loading Mooberball…")
-                        .padding(8)
-                        .accessibilityAddTraits(.updatesFrequently)
-                }
                 if let failure = browser.failure {
                     VStack(spacing: 12) {
                         Text(failure).multilineTextAlignment(.center)
