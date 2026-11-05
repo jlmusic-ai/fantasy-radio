@@ -3,20 +3,8 @@ import SwiftUI
 @MainActor
 struct GameView: View {
     @StateObject private var browser = GameBrowser()
-    @State private var pendingAction: PendingAction?
     @State private var showAbout = false
     @Environment(\.openURL) private var openURL
-
-    private enum PendingAction: Identifiable {
-        case destination(GameDestination), back, reload
-        var id: String {
-            switch self {
-            case .destination(let destination): return destination.rawValue
-            case .back: return "back"
-            case .reload: return "reload"
-            }
-        }
-    }
 
     var body: some View {
         NavigationStack {
@@ -29,7 +17,7 @@ struct GameView: View {
                 if let failure = browser.failure {
                     VStack(spacing: 12) {
                         Text(failure).multilineTextAlignment(.center)
-                        Button("Try again") { pendingAction = .reload }
+                        Button("Try again") { browser.retry() }
                     }
                     .padding()
                     .frame(maxWidth: .infinity)
@@ -39,7 +27,7 @@ struct GameView: View {
                 HStack {
                     ForEach(GameDestination.allCases) { destination in
                         Button {
-                            pendingAction = .destination(destination)
+                            browser.navigate(to: destination)
                         } label: {
                             VStack(spacing: 4) {
                                 Image(systemName: destination.symbol)
@@ -60,22 +48,13 @@ struct GameView: View {
             .tint(.yellow)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Back", systemImage: "chevron.left") { pendingAction = .back }
+                    Button("Back", systemImage: "chevron.left") { browser.webView.goBack() }
                         .disabled(!browser.canGoBack)
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button("Reload", systemImage: "arrow.clockwise") { pendingAction = .reload }
+                    Button("Reload", systemImage: "arrow.clockwise") { browser.retry() }
                     Button("About", systemImage: "info.circle") { showAbout = true }
                 }
-            }
-            .confirmationDialog("Leave this page?", isPresented: Binding(
-                get: { pendingAction != nil },
-                set: { if !$0 { pendingAction = nil } }
-            ), presenting: pendingAction) { action in
-                Button("Continue") { perform(action) }
-                Button("Stay here", role: .cancel) {}
-            } message: { _ in
-                Text("Save any lineup changes before continuing. Unsaved changes may be lost.")
             }
             .alert("Open another app?", isPresented: Binding(
                 get: { browser.externalURL != nil },
@@ -111,12 +90,4 @@ struct GameView: View {
         }
     }
 
-    private func perform(_ action: PendingAction) {
-        switch action {
-        case .destination(let destination): browser.navigate(to: destination)
-        case .back: browser.webView.goBack()
-        case .reload: browser.retry()
-        }
-        pendingAction = nil
-    }
 }
