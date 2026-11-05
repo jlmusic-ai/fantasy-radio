@@ -2,7 +2,7 @@
 
 This is a SwiftUI iPhone prototype using one persistent WKWebView to play the existing production game. Accounts, picks, rankings and rivalries remain in the existing website/backend. No privileged keys, new database or production web changes are needed.
 
-This milestone is **not App Store submission ready**. It establishes the iOS target and the device-testing path. It adds native navigation, a loading indicator, retry messaging, confirmed navigation to protect unsaved picks, an offline About screen and explicit confirmation before opening external links. It does not add push notifications or offline gameplay.
+This milestone is **not App Store submission ready**. It establishes the iOS target and the device-testing path. It adds native navigation, a loading indicator, retry messaging, an offline About screen and explicit confirmation before opening external links. It does not add push notifications or offline gameplay.
 
 ## Open on a Mac
 
@@ -19,19 +19,20 @@ Generated Xcode projects are ignored; update project.yml for durable project set
 
 - Email/password login completes with Turnstile; cookies survive relaunch.
 - Sign-up, confirmation and password recovery work. Email links currently open the website; universal links and cross-context recovery need implementation before release.
-- Existing and new players can save valid picks, reload and see saved values. Test cancelled navigation with an unsaved lineup.
+- Existing and new players can save valid picks, reload and see saved values. Native navigation currently has no unsaved-lineup warning; save edits before leaving.
 - Lock time, submitted status, weekly/season rankings and Rivalries match the website.
 - Profile upload works with the photo picker and camera, including denied permissions.
 - Log out prevents further protected access; sign back in as a different test user.
 - Test airplane mode, retry, slow connections, process termination, keyboard, large text and VoiceOver.
 - External links ask before opening; automatic off-origin navigation is blocked. Facebook OAuth is not supported by this prototype. The website's feature flag may expose that button; test email/password only until native social authentication is implemented.
 
-The app reaches live Mooberball data: use designated test accounts and do not modify real players' picks during testing. A Mac/iOS build and device QA have not yet been performed in the Linux development environment.
+The app reaches live Mooberball data: use designated test accounts and do not modify real players' picks during testing. The initial automated macOS simulator compilation passed, and the owner confirmed simulator launch and login. Physical-device QA and the navigation fix still need verification.
 
 ## Before TestFlight / App Store
 
 - Produce and verify a successful signed device archive with current Apple-required SDKs.
 - Add production app icon, launch assets and screenshots.
+- Add accurate unsaved-lineup tracking and warn only for actual unsaved changes.
 - Make the mobile navigation/layout feel integrated; the web header remains visible in this prototype.
 - Deliver meaningful app-specific functionality and polish beyond the web wrapper (Apple guideline 4.2). Native tabs alone do not establish review eligibility.
 - Implement/test notification opt-in, device-token lifecycle and server-side eligibility filtering before offering pick reminders. Never notify players who have already submitted.
