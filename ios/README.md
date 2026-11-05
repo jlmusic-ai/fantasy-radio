@@ -8,7 +8,7 @@ This milestone is **not App Store submission ready**. It establishes the iOS tar
 
 1. Install the current stable Xcode from the Mac App Store and open it once to install its components.
 2. With Homebrew installed, run `brew install xcodegen`.
-3. Check out this branch and run `cd ios`, then `xcodegen generate`. Its pre-generation command packages `app/icon.png` as an opaque 1024 × 1024 app icon using the included Swift script. The current 256-pixel artwork is upscaled for prototype testing; replace it with a high-resolution original before store release.
+3. Check out this branch and run `cd ios`, then `xcodegen generate`. Its pre-generation command packages the dedicated `Branding/mb-app-icon.png` artwork as an opaque 1024 × 1024 app icon using the included Swift script. This icon uses only the letters MB and football branding, with no hosts or people; the website logo is unchanged.
 4. Open `Mooberball.xcodeproj`. Select the Mooberball target → Signing & Capabilities → your existing Apple Developer team. Automatic signing is enabled. The proposed bundle ID is `com.mooberball.ios`; verify availability under your team before registering it or creating an App Store Connect app.
 5. Select an iPhone simulator and Run. For a physical iPhone, connect it, enable Developer Mode when prompted, select it as the destination and Run.
 6. Run Product → Test for navigation-policy unit tests.
@@ -31,7 +31,7 @@ The app reaches live Mooberball data: use designated test accounts and do not mo
 ## Before TestFlight / App Store
 
 - Produce and verify a successful signed device archive with current Apple-required SDKs.
-- Replace the upscaled prototype app icon with high-resolution source artwork; add launch assets and screenshots.
+- Verify the MB icon on a physical device; add launch assets and screenshots.
 - Add accurate unsaved-lineup tracking and warn only for actual unsaved changes.
 - Make the mobile navigation/layout feel integrated; the web header remains visible in this prototype.
 - Deliver meaningful app-specific functionality and polish beyond the web wrapper (Apple guideline 4.2). Native tabs alone do not establish review eligibility.
