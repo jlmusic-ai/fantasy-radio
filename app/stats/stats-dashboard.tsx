@@ -26,7 +26,7 @@ export default function StatsDashboard({ weeks, topics, uniquePlayers }: {
 }) {
   const [topicSort, setTopicSort] = useState<"total" | "name" | "weeks">("total");
   const [archiveSort, setArchiveSort] = useState<"newest" | "oldest" | "average" | "activity">("newest");
-  const sortedTopics = useMemo(() => [...topics].sort((a, b) => topicSort === "name"
+  const sortedTopics = useMemo(() => topics.filter((topic) => !topic.birthday).sort((a, b) => topicSort === "name"
     ? a.name.localeCompare(b.name)
     : topicSort === "weeks"
       ? Object.keys(b.weeks).length - Object.keys(a.weeks).length || b.total - a.total
@@ -44,7 +44,16 @@ export default function StatsDashboard({ weeks, topics, uniquePlayers }: {
   const averageScore = totalPlayerWeeks ? Math.round(totalPoints / totalPlayerWeeks * 10) / 10 : 0;
   const maxAverage = Math.max(1, ...weeks.map((week) => week.averageScore));
   const maxOccurrences = Math.max(1, ...weeks.map((week) => week.occurrences));
-  const maxTopic = Math.max(1, ...topics.map((topic) => topic.total));
+  const maxTopic = Math.max(1, ...sortedTopics.map((topic) => topic.total));
+  const birthdayTopics = topics.filter((topic) => topic.birthday);
+  const birthdayTotal = birthdayTopics.reduce((sum, topic) => sum + topic.total, 0);
+  const birthdayWeeks = weeks.filter((week) => birthdayTopics.some((topic) =>
+    Object.hasOwn(topic.weeks, week.week),
+  )).map((week) => ({
+    week: week.week,
+    wishes: birthdayTopics.reduce((sum, topic) => sum + (topic.weeks[week.week] || 0), 0),
+  }));
+  const maxBirthdayWishes = Math.max(1, ...birthdayWeeks.map((week) => week.wishes));
 
   return <div className="stats-page">
     <div className="stats-intro">
@@ -100,12 +109,27 @@ export default function StatsDashboard({ weeks, topics, uniquePlayers }: {
         </div>
         <div className="stats-topic-list">
           {sortedTopics.map((topic) => <div className="stats-topic-row" key={topic.id}>
-            <div className="stats-topic-name"><strong>{topic.name}</strong>{topic.birthday && <span className="stats-bonus-label">Birthday bonus</span>}
+            <div className="stats-topic-name"><strong>{topic.name}</strong>
               <span className="muted">{Object.keys(topic.weeks).length} {Object.keys(topic.weeks).length === 1 ? "week" : "weeks"} scored</span></div>
             <div className="stats-topic-track" aria-hidden="true"><div style={{ width: `${topic.total / maxTopic * 100}%` }} /></div>
             <strong className="stats-topic-count">{topic.total} <span className="muted">occurrences</span></strong>
           </div>)}
         </div>
+      </section>
+
+      <section className="panel" aria-labelledby="stats-birthday">
+        <h2 id="stats-birthday">Bob’s Birthday Wishes</h2>
+        <p className="muted">Birthday wishes recorded in finalized weeks for the closest-guess bonus.</p>
+        {birthdayWeeks.length ? <>
+          <p><strong>{birthdayTotal} total wishes</strong> · {birthdayWeeks.length} {birthdayWeeks.length === 1 ? "week" : "weeks"} scored</p>
+          <div className="stats-chart" role="list" aria-label="Birthday wishes by week">
+            {birthdayWeeks.map((week) => <div className="stats-chart-row" role="listitem" key={week.week}>
+              <span>{formatDate(week.week)}</span>
+              <div className="stats-chart-track" aria-hidden="true"><div className="stats-chart-fill stats-chart-fill-blue" style={{ width: `${week.wishes / maxBirthdayWishes * 100}%` }} /></div>
+              <strong>{week.wishes}</strong>
+            </div>)}
+          </div>
+        </> : <p className="muted">Birthday wishes will appear here once they are scored in a finalized week.</p>}
       </section>
 
       <section className="panel" aria-labelledby="stats-archive">
