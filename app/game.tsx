@@ -12,6 +12,7 @@ import {
   pickingWeek,
   weekStart,
 } from "../lib/game";
+import { buildLeaderboard, loadSeasonParticipants } from "../lib/leaderboards";
 import Avatar from "./avatar";
 import FoundingBadge from "./founding-badge";
 import WeeklyRecap from "./weekly-recap";
@@ -153,7 +154,7 @@ export default function Game() {
       weekRef.current = w;
       setWeek(w);
     }
-    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonStatsRows, finalization, dailyStatus, priorTopics, currentTopics, scoreFinalization, scoreWeekSettings, scoreTopics, scoreLines, scoreLineupStatus] =
+    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonStatsRows, finalization, dailyStatus, priorTopics, currentTopics, scoreFinalization, scoreWeekSettings, scoreTopics, scoreLines, scoreLineupStatus, seasonParticipants] =
       await Promise.all([
       db
         .from("categories")
@@ -202,6 +203,7 @@ export default function Game() {
       db.from("daily_scoring_lines").select("category_id,quantity").eq("week_id", scoreWeek),
       db.from("weekly_lineup_status").select("user_id")
         .eq("week_id", scoreWeek).eq("allocated_points", 100).limit(1000),
+      loadSeasonParticipants(db, FIRST_SEASON_START, FIRST_SEASON_END),
     ]);
     setPreviousTopicNames(priorTopics.error ? null :
       new Set((priorTopics.data || []).map((topic) => topic.topic_name.trim().toLowerCase())));
@@ -265,26 +267,13 @@ export default function Game() {
         .filter((lineup) => visiblePlayerIds.has(lineup.user_id))
         .map((lineup) => lineup.user_id)).size);
 
-    const includeZeroScores = (scoredPlayers: Score[]) => {
-      if (!allPlayers.length) return scoredPlayers;
-      const scoresByUser = new Map(
-        scoredPlayers.map((player) => [player.user_id, player.score]),
-      );
-      return allPlayers
-        .map((player) => ({
-          user_id: player.id,
-          username: player.username,
-          avatar_url: player.avatar_url,
-          score: scoresByUser.get(player.id) ?? 0,
-          founding_member: player.founding_member,
-        }))
-        .sort(
-          (a, b) =>
-            b.score - a.score || a.username.localeCompare(b.username),
-        );
-    };
-    const rawLeaders = includeZeroScores((lb.data || []) as Score[]);
-    const rawSeasonLeaders = includeZeroScores((sl.data || []) as Score[]);
+    const rawLeaders = buildLeaderboard(
+      (lb.data || []) as Score[], allPlayers,
+      new Set((scoreLineupStatus.data || []).map((lineup) => lineup.user_id)),
+    );
+    const rawSeasonLeaders = buildLeaderboard(
+      (sl.data || []) as Score[], allPlayers, seasonParticipants,
+    );
     const statsByPlayer = new Map(
       ((seasonStatsRows.data || []) as SeasonStatsRow[]).map((row) => [
         row.user_id,
