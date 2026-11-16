@@ -8,6 +8,9 @@ import {
   FIRST_SEASON_END,
   FIRST_SEASON_START,
   formatDate,
+  hasScheduledPlay,
+  STUFF_A_BUS_TOPIC,
+  STUFF_A_BUS_WEEK,
   isBroadcastScoringWindow,
   pickingWeek,
   weekStart,
@@ -79,6 +82,7 @@ export default function Game() {
     [picks, setPicks] = useState<Record<string, number>>({}),
     [birthdayGuess, setBirthdayGuess] = useState<number | null>(null),
     [bonusFinalized, setBonusFinalized] = useState(false),
+    [busesStuffed, setBusesStuffed] = useState<number | null>(null),
     [events, setEvents] = useState<Record<string, number>>({}),
     [completedPickUsers, setCompletedPickUsers] = useState<Set<string>>(
       new Set(),
@@ -148,7 +152,7 @@ export default function Game() {
     previousMonday.setUTCDate(previousMonday.getUTCDate() - 7);
     const previousWeek = previousMonday.toISOString().slice(0, 10);
     const nowForStatus = new Date();
-    setShowScoringStatus(weekStart(nowForStatus) === w && isBroadcastScoringWindow(nowForStatus));
+    setShowScoringStatus(hasScheduledPlay(w) && weekStart(nowForStatus) === w && isBroadcastScoringWindow(nowForStatus));
     const weekChanged = weekRef.current !== w;
     if (weekChanged) {
       weekRef.current = w;
@@ -161,7 +165,7 @@ export default function Game() {
         .select("id,name,lineup_subtitle,scoring_type,display_order,active")
         .order("display_order")
         .order("name"),
-      db.from("weeks").select("lock_at").eq("id", w).maybeSingle(),
+      db.from("weeks").select("lock_at,stuff_a_bus_total").eq("id", w).maybeSingle(),
       db.from("daily_scoring_lines").select("category_id,quantity").eq("week_id", w),
       db
         .from("weekly_scores")
@@ -212,9 +216,10 @@ export default function Game() {
     setDailyScoringComplete(Boolean(todayStatus?.completed));
     bonusFinalizedRef.current = Boolean(finalization.data?.scores_finalized_at);
     setBonusFinalized(bonusFinalizedRef.current);
+    setBusesStuffed(w === STUFF_A_BUS_WEEK ? ws.data?.stuff_a_bus_total ?? null : null);
     const lockAt =
       pickWindowData?.closes_at || ws.data?.lock_at || defaultLockAt(w);
-    const isLocked = pickWindowData?.is_locked ?? Date.now() >= new Date(lockAt).getTime();
+    const isLocked = !hasScheduledPlay(w) || (pickWindowData?.is_locked ?? Date.now() >= new Date(lockAt).getTime());
     if (!cats.error) {
       const allTopics = cats.data || [];
       if (isLocked && !currentTopics.error && currentTopics.data?.length) {
@@ -369,7 +374,7 @@ export default function Game() {
     load();
     const refreshPickWindow = async () => {
       const nowForStatus = new Date();
-      setShowScoringStatus(weekStart(nowForStatus) === weekRef.current && isBroadcastScoringWindow(nowForStatus));
+      setShowScoringStatus(hasScheduledPlay(weekRef.current) && weekStart(nowForStatus) === weekRef.current && isBroadcastScoringWindow(nowForStatus));
       const [pickWindowResult, dailyStatusResult, scoreFinalResult] = await Promise.all([
         db.rpc("active_pick_window").single(),
         db.rpc("today_scoring_status").single(),
@@ -401,7 +406,7 @@ export default function Game() {
           await load({ showLoading: false, hydratePicks: false });
           return;
         }
-        const isLocked = nextWindow.is_locked;
+        const isLocked = !hasScheduledPlay(nextWindow.active_week) || nextWindow.is_locked;
         if (isLocked !== lockedRef.current) {
           await load({ showLoading: false, hydratePicks: false });
           return;
@@ -433,6 +438,8 @@ export default function Game() {
       db.removeChannel(channel);
     };
   }, []);
+  const specialWeek = week === STUFF_A_BUS_WEEK;
+  const offseason = !hasScheduledPlay(week);
   const allocationCategories = categories.filter(
       (c) => c.scoring_type === "allocation",
     ),
@@ -440,7 +447,7 @@ export default function Game() {
       (c) => c.scoring_type === "closest_guess",
     ),
     total = allocationCategories.reduce((a, c) => a + (picks[c.id] || 0), 0),
-    birthdayActual = birthdayCategory ? events[birthdayCategory.id] || 0 : 0,
+    birthdayActual = specialWeek ? busesStuffed ?? 0 : birthdayCategory ? events[birthdayCategory.id] || 0 : 0,
     bonus = bonusFinalized ? birthdayBonus(birthdayGuess, birthdayActual) : 0,
     selectedWeeklyPlayer = leaders.find(
       (player) => player.user_id === selectedWeeklyUserId,
@@ -532,7 +539,7 @@ export default function Game() {
     const data = await response.json();
     setMessage(
       response.ok
-        ? "Lineup and birthday guess saved successfully."
+        ? specialWeek ? "Lineup and Stuff a Bus prediction saved successfully." : "Lineup and birthday guess saved successfully."
         : data.error || "Unable to save",
     );
     if (response.ok) {
@@ -551,10 +558,11 @@ export default function Game() {
           seasonRank={currentSeasonRank} seasonPlayers={seasonLeaders.length} />
         <div className="panel">
           <div className="muted">LINEUP STATUS</div>
-          <h2 className={!loading && !locked ? "picks-open-heading" : undefined}>{loading ? "Checking lineup…" : locked ? "Locked" : "Open for picks"}</h2>
-          <div className="muted">{total} / 100 points allocated</div>
+          <h2 className={!loading && !locked ? "picks-open-heading" : undefined}>{loading ? "Checking lineup…" : offseason ? "Season break" : locked ? "Locked" : "Open for picks"}</h2>
+          {!offseason && <div className="muted">{total} / 100 points allocated</div>}
         </div>
       </div>
+      {week >= STUFF_A_BUS_WEEK && <p><a href="/stuff-a-bus">Stuff a Bus special season</a></p>}
       {showScoringStatus && <div
         className={`daily-scoring-status ${
           bonusFinalized || dailyScoringComplete ? "daily-scoring-complete" : "daily-scoring-pending"
@@ -563,7 +571,7 @@ export default function Game() {
       >
         <strong>
           {bonusFinalized
-            ? "This week’s scores are final, including the birthday bonus."
+            ? specialWeek ? "This week’s scores and Stuff a Bus results are final." : "This week’s scores are final, including the birthday bonus."
             : dailyScoringComplete
             ? "Today’s scoring is complete."
             : "Today’s scoring has not yet been completed."}
@@ -604,9 +612,14 @@ export default function Game() {
       </div>
       {loading ? (
         <p>Loading game…</p>
+      ) : tab === "picks" && offseason ? (
+        <div className="panel">
+          <h2>No picks this week</h2>
+          {week < STUFF_A_BUS_WEEK && <p>Stuff a Bus picks open Friday, November 27 at 5:00 p.m. Eastern for the November 30–December 4 special season.</p>}
+        </div>
       ) : tab === "picks" ? (
         <div className="panel">
-          <h2>Weekly lineup</h2>
+          <h2>{specialWeek ? "Stuff a Bus lineup" : "Weekly lineup"}</h2>
           {!user && (
             <p>
               <a href="/signup">Create an account</a> or{" "}
@@ -677,27 +690,29 @@ export default function Game() {
               </div>
             );
           })}
-          {birthdayCategory && (
+          {(birthdayCategory || specialWeek) && (
             <div className="panel">
               <h3 className="lineup-topic-title">
-                {birthdayCategory.name}
-                {!locked && previousTopicNames &&
+                {specialWeek ? STUFF_A_BUS_TOPIC : birthdayCategory?.name}
+                {!specialWeek && birthdayCategory && !locked && previousTopicNames &&
                   !previousTopicNames.has(birthdayCategory.name.trim().toLowerCase()) && (
                     <span className="new-topic-badge" title="This topic wasn’t in last week’s lineup">New this week</span>
                   )}
               </h3>
-              {birthdayCategory.lineup_subtitle.trim() && (
+              {!specialWeek && birthdayCategory?.lineup_subtitle.trim() && (
                 <p className="muted lineup-subtitle">{birthdayCategory.lineup_subtitle}</p>
               )}
               <p className="muted">
                 {bonusFinalized
-                  ? `${birthdayActual} occurrences · ${bonus} bonus points earned`
-                  : "Bonus points are awarded after the commissioner finalizes this week’s scores."}
+                  ? `${birthdayActual} ${specialWeek ? "buses stuffed" : "occurrences"} · ${bonus} bonus points earned`
+                  : specialWeek
+                    ? "Predict the total number of buses Mikey and Bob will fill with toys over the whole event. The closest guess wins, and equally close guesses share the win."
+                    : "Bonus points are awarded after the commissioner finalizes this week’s scores."}
               </p>
               <label>
                 Your guess
                 <input
-                  aria-label="Birthday wishes guess"
+                  aria-label={specialWeek ? "Total buses stuffed prediction" : "Birthday wishes guess"}
                   type="number"
                   min="0"
                   max="500"

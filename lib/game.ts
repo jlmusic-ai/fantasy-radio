@@ -1,6 +1,13 @@
 export const ZONE = "America/New_York";
 export const FIRST_SEASON_START = "2026-10-05";
 export const FIRST_SEASON_END = "2026-11-20";
+export const STUFF_A_BUS_WEEK = "2026-11-30";
+export const STUFF_A_BUS_TOPIC = "Stuff a Bus: Buses Stuffed";
+export const STUFF_A_BUS_PICK_OPEN = "2026-11-27T22:00:00Z";
+
+export function hasScheduledPlay(week: string) {
+  return week < "2026-11-23" || week === STUFF_A_BUS_WEEK;
+}
 
 export function formatDate(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);

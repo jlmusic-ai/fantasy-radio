@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { redirect } from "next/navigation";
-import { defaultLockAt, formatDate, weekStart, FIRST_SEASON_START, FIRST_SEASON_END } from "../../lib/game";
+import { defaultLockAt, formatDate, hasScheduledPlay, weekStart, FIRST_SEASON_START, FIRST_SEASON_END } from "../../lib/game";
 import { serverClient } from "../../lib/server";
 import { loadRivalryStats } from "../../lib/rivalry-stats";
 import RivalryStatistics from "./rivalry-statistics";
@@ -80,7 +80,8 @@ export default async function RivalriesPage() {
         alt="Mooberball Rivalries" className="rivalries-logo" priority />
       <p className="muted">Week beginning {formatDate(week)} · Pairings are set after picks lock Monday at 6 a.m. Eastern.</p>
     </div>
-    {error ? <div className="panel" role="alert">Rivalries are unavailable right now. Please try again shortly.</div>
+    {!hasScheduledPlay(week) ? <div className="panel">There are no rivalries scheduled this week.</div>
+      : error ? <div className="panel" role="alert">Rivalries are unavailable right now. Please try again shortly.</div>
       : groups.size ? <RivalriesBoard
           groups={[...groups].map(([number, players]) => ({ number, players }))}
           viewerId={user.id} finalized={Boolean(finalized.data?.scores_finalized_at)} />

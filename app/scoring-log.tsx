@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { browserClient } from "../lib/supabase";
-import { formatDate } from "../lib/game";
+import { formatDate, STUFF_A_BUS_WEEK } from "../lib/game";
 
 type CompletedDay = { scoring_date: string; week_id: string; commissioner_note: string; podcast_episode_title: string | null };
 type DailyLine = {
@@ -18,6 +18,7 @@ export default function ScoringLog({ currentWeek }: { currentWeek: string }) {
   const [selectedWeek, setSelectedWeek] = useState(currentWeek);
   const [days, setDays] = useState<CompletedDay[]>([]);
   const [lines, setLines] = useState<DailyLine[]>([]);
+  const [busTotal, setBusTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -26,7 +27,7 @@ export default function ScoringLog({ currentWeek }: { currentWeek: string }) {
   useEffect(() => {
     let active = true;
     async function refresh() {
-      const [completed, counts] = await Promise.all([
+      const [completed, counts, busResult] = await Promise.all([
         db.from("daily_scoring_status")
           .select("scoring_date,week_id,commissioner_note,podcast_episode_title")
           .order("scoring_date", { ascending: false })
@@ -35,10 +36,17 @@ export default function ScoringLog({ currentWeek }: { currentWeek: string }) {
           .select("scoring_date,category_id,topic_name,scoring_type,quantity")
           .eq("week_id", selectedWeek)
           .order("scoring_date", { ascending: false }),
+        selectedWeek === STUFF_A_BUS_WEEK
+          ? db.from("finalized_weeks").select("scores_finalized_at").eq("week_id", selectedWeek).maybeSingle()
+          : null,
       ]);
+      const finalBuses = busResult?.data?.scores_finalized_at
+        ? await db.from("weeks").select("stuff_a_bus_total").eq("id", selectedWeek).maybeSingle()
+        : null;
       if (!active) return;
       setLoading(false);
-      if (completed.error || counts.error) {
+      setBusTotal(finalBuses?.data?.stuff_a_bus_total ?? null);
+      if (completed.error || counts.error || busResult?.error || finalBuses?.error) {
         setError("The completed daily scores could not be loaded. Please try again.");
         return;
       }
@@ -111,7 +119,10 @@ export default function ScoringLog({ currentWeek }: { currentWeek: string }) {
           </section>
         );
       })}
-      {selectedDays.length > 0 && (
+      {!loading && !error && selectedWeek === STUFF_A_BUS_WEEK && busTotal !== null && (
+        <p><strong>Stuff a Bus final total</strong> · {busTotal} {busTotal === 1 ? "bus" : "buses"} stuffed</p>
+      )}
+      {selectedDays.length > 0 && selectedWeek !== STUFF_A_BUS_WEEK && (
         <p className="muted scoring-history-note">Birthday bonus points are awarded when the week is finalized.</p>
       )}
     </section>
