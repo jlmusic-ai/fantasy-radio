@@ -39,9 +39,9 @@ function weekLabel(week: string) {
   return `week of ${week.slice(5, 7)}-${week.slice(8, 10)}-${week.slice(0, 4)}`;
 }
 
-const recap = "That’s a wrap on the first season of Mooberball! Seven weeks of picks, Pittsburgh Scanner stories, and birthday wishes are in the books. Thanks for playing along and making our first season such a good time.";
+const recap = "That’s a wrap on the first season of Mooberball! This has been a super fun seven weeks! Thanks for playing along and making our first season such a good time.";
 const upcomingTitle = "Up next: Stuff a Bus · Nov. 30–Dec. 4";
-const upcoming = "Season One is over, and we’re taking a week off. For the Stuff a Bus special, make your regular picks and give us one guess for how many buses Mikey and Bob will fill with toys for Toys for Tots. Closest guess wins the Stuff a Bus challenge!";
+const upcoming = "With Season One over, we’re taking a week off. For the Stuff a Bus special season, you'll make your regular picks and give one guess for how many buses will get filled with toys! The closer you are to the number, the more bonus points you get that week. Works the same as Bob's birthday wishes!";
 const medals = ["🏆", "🥈", "🥉"];
 const points = (score: number) => new Intl.NumberFormat("en-US").format(score);
 
@@ -67,7 +67,7 @@ export function renderWeekResult(week: string, recipient: Recipient, podium?: Po
   const text = [
     "Howdy Moober!", finale ? recap : `${recipient.username}, the scores are final.`,
     `${finale ? "Your Week 7 finish: " : ""}${result} · ${points(recipient.score)} ${recipient.score === 1 ? "point" : "points"}`,
-    footer, `See final scores: ${SITE_URL}/`, finale ? "Happy Birthday, Bob!" : "",
+    footer, `See final scores: ${SITE_URL}/`, finale ? "-Chef Jon" : "",
     `Unsubscribe from all Mooberball emails: ${unsubscribeUrl(recipient.user_id)}`,
   ].filter(Boolean).join("\n\n");
   return { subject, text, html: resultHtml(week, recipient, reminder, finale ? podium : undefined) };
@@ -102,7 +102,7 @@ function resultHtml(week: string, recipient: Recipient, reminder: string, podium
         </div>
         ${finale ? seasonBlock : '<p style="margin:22px 0;color:#e2e2e2;font-size:16px;line-height:1.5;">See the weekly leaderboard and how your points were earned on Mooberball.</p>'}
         <a href="${SITE_URL}/" style="display:inline-block;padding:14px 20px;border-radius:9px;background:#ffca05;color:#151515;font-size:16px;font-weight:800;text-decoration:none;">See final scores</a>
-        ${finale || reminder ? `<p style="margin:24px 0 0;color:#ffca05;font-size:16px;line-height:1.5;">${finale ? "Happy Birthday, Bob!" : escapeHtml(reminder)}</p>` : ""}
+        ${finale || reminder ? `<p style="margin:24px 0 0;color:#ffca05;font-size:16px;line-height:1.5;">${finale ? "-Chef Jon" : escapeHtml(reminder)}</p>` : ""}
         <p style="margin:24px 0 0;color:#999999;font-size:12px;line-height:1.5;">Mooberball is an independent fan-made game.</p>
         ${unsubscribeFooter(unsubscribeUrl(recipient.user_id))}
       </div>
