@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { browserClient } from "../../../lib/supabase";
-import { defaultLockAt, formatDate, hasScheduledPlay, pickingWeek, STUFF_A_BUS_WEEK, weekStart } from "../../../lib/game";
+import { defaultLockAt, formatDate, FIRST_SEASON_FINALE, hasScheduledPlay, pickingWeek, STUFF_A_BUS_WEEK, weekStart } from "../../../lib/game";
 
 type Category = {
   id: string;
@@ -25,9 +25,6 @@ export default function ScoreThisWeek() {
   const [saving, setSaving] = useState<string | null>(null);
   const [finalizing, setFinalizing] = useState(false);
   const [finalized, setFinalized] = useState(false);
-  const [busTotal, setBusTotal] = useState<number | null>(null);
-  const [busDraft, setBusDraft] = useState("");
-  const [busMessage, setBusMessage] = useState("");
   const [lockAt, setLockAt] = useState<string | null>(null);
   const [dailyComplete, setDailyComplete] = useState(false);
   const [dailySaving, setDailySaving] = useState(false);
@@ -38,19 +35,21 @@ export default function ScoreThisWeek() {
   const [now, setNow] = useState(Date.now());
   const [message, setMessage] = useState("");
   const week = weekStart(new Date(now));
+  const stuffABus = week === STUFF_A_BUS_WEEK;
+  const seasonFinale = week === FIRST_SEASON_FINALE;
+  const seasonBreak = !hasScheduledPlay(week);
+  const bonusLabel = stuffABus ? "Stuff a Bus bonus" : "birthday bonus";
+  const [busTotal, setBusTotal] = useState<number | null>(null);
+  const [busDraft, setBusDraft] = useState("");
   const easternDay = new Intl.DateTimeFormat("sv-SE", {
     timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
   }).format(new Date(now));
-  const specialWeek = week === STUFF_A_BUS_WEEK;
-  const canSetBusTotal = specialWeek && easternDay >= "2026-12-04";
-  const predictionLabel = specialWeek ? "Stuff a Bus bonus" : "birthday bonus";
   const scoringDate = selectedDate >= week && selectedDate <= easternDay ? selectedDate : easternDay;
   const loading = loadedDate !== scoringDate;
   const busy = loading || Boolean(saving) || finalizing || dailySaving || noteSaving;
   const canFinalize = pickingWeek(new Date(now)) > week;
   const canCloseEarly = !canFinalize && now >= new Date(lockAt || defaultLockAt(week)).getTime();
-  const hasUnsavedBusTotal = specialWeek && busDraft !== String(busTotal ?? "");
-  const predictionReady = !specialWeek || (busTotal !== null && !hasUnsavedBusTotal);
+  const needsBusTotal = stuffABus && (busTotal === null || busDraft !== String(busTotal));
   const hasUnsavedTotals = categories.some((category) =>
     Number(drafts[category.id]) !== (totals[category.id] || 0),
   );
@@ -70,9 +69,9 @@ export default function ScoreThisWeek() {
       .single();
     if (request !== loadRequest.current || !profile?.is_commissioner) return;
     setAllowed(true);
-    if (!hasScheduledPlay(week)) return;
+    if (seasonBreak) return;
 
-    const [categoryResult, eventResult, finalizationResult, dailyStatusResult, weekResult] = await Promise.all([
+    const [categoryResult, eventResult, finalizationResult, dailyStatusResult, weekResult, busTotalResult] = await Promise.all([
       db
         .from("categories")
         .select("id,name,display_order,scoring_type")
@@ -87,18 +86,23 @@ export default function ScoreThisWeek() {
         .eq("week_id", week).maybeSingle(),
       db.from("daily_scoring_status").select("completed_at,commissioner_note")
         .eq("scoring_date", scoringDate).maybeSingle(),
-      db.from("weeks").select("lock_at,stuff_a_bus_total").eq("id", week).maybeSingle(),
+      db.from("weeks").select("lock_at").eq("id", week).maybeSingle(),
+      stuffABus ? db.from("stuff_a_bus_totals").select("buses").eq("week_id", week).maybeSingle() : Promise.resolve({ data: null, error: null }),
     ]);
 
     if (request !== loadRequest.current) return;
-    const loadError = [categoryResult, eventResult, finalizationResult, dailyStatusResult, weekResult].find((result) => result.error)?.error;
+    const loadError = [categoryResult, eventResult, finalizationResult, dailyStatusResult, weekResult, busTotalResult].find((result) => result.error)?.error;
     if (loadError) {
       setMessage("Unable to load this show's scoring. Refresh the page to try again.");
       return;
     }
+    const savedBusTotal = busTotalResult.data?.buses ?? null;
+    setBusTotal(savedBusTotal);
+    setBusDraft(savedBusTotal === null ? "" : String(savedBusTotal));
     const nextCategories = ((categoryResult.data || []) as Category[])
-      .filter((category) => !specialWeek || category.scoring_type !== "closest_guess")
-      .sort((a, b) => Number(a.scoring_type === "closest_guess") - Number(b.scoring_type === "closest_guess"));
+      .filter((category) => !stuffABus || category.scoring_type === "allocation").sort((a, b) =>
+      Number(a.scoring_type === "closest_guess") - Number(b.scoring_type === "closest_guess"),
+    );
     const nextTotals: Record<string, number> = {};
     const otherTotals: Record<string, number> = {};
     const dateFormat = new Intl.DateTimeFormat("sv-SE", {
@@ -112,8 +116,6 @@ export default function ScoreThisWeek() {
     setCategories(nextCategories);
     setFinalized(Boolean(finalizationResult.data?.scores_finalized_at));
     setLockAt(weekResult.data?.lock_at || null);
-    setBusTotal(weekResult.data?.stuff_a_bus_total ?? null);
-    setBusDraft(String(weekResult.data?.stuff_a_bus_total ?? ""));
     setDailyComplete(
       Boolean(dailyStatusResult.data?.completed_at),
     );
@@ -251,34 +253,31 @@ export default function ScoreThisWeek() {
   }
 
   async function saveBusTotal() {
-    if (!canSetBusTotal || busy || finalized || mutationPending.current) return;
-    const total = Number(busDraft);
-    if (!/^\d+$/.test(busDraft) || !Number.isInteger(total) || total > 500) {
-      setBusMessage("Enter a whole number from 0 to 500.");
+    const buses = Number(busDraft);
+    if (busy || mutationPending.current || finalized || easternDay < "2026-12-04") return;
+    if (!busDraft.trim() || !Number.isInteger(buses) || buses < 0 || buses > 500) {
+      setMessage("Enter a whole number between 0 and 500.");
       return;
     }
     mutationPending.current = true;
-    setSaving("stuff-a-bus");
-    setBusMessage("");
-    try {
-      const { error } = await db.rpc("save_stuff_a_bus_total", { p_total: total });
-      if (error) throw new Error(error.message);
-      setBusTotal(total);
-      setBusDraft(String(total));
-      setBusMessage("Final bus total saved.");
-    } catch (error) {
-      setBusMessage(error instanceof Error ? error.message : "Unable to save the bus total.");
-    } finally {
-      mutationPending.current = false;
-      setSaving(null);
+    setSaving("bus-total");
+    const { error } = await db.rpc("save_stuff_a_bus_total", { p_buses: buses });
+    mutationPending.current = false;
+    setSaving(null);
+    if (error) {
+      setMessage(error.message);
+      return;
     }
+    setBusTotal(buses);
+    setBusDraft(String(buses));
+    setMessage("Score updated.");
   }
 
   async function finalizeScores(early = false) {
-    if (!(early ? canCloseEarly : canFinalize) || finalized || busy || mutationPending.current || hasUnsavedTotals || !predictionReady) return;
-    const warning = early
-      ? `Close this broadcast week early and award the ${predictionLabel}? All occurrence totals and weekly scores will be frozen.`
-      : `Finalize this week’s scores and award the ${predictionLabel}? You won’t be able to edit these totals afterward.`;
+    if (!(early ? canCloseEarly : canFinalize) || finalized || busy || mutationPending.current || hasUnsavedTotals || needsBusTotal) return;
+    const warning = seasonFinale
+      ? "Finalize Week 7 and Season One? This freezes the scores, announces the season champion, and sends the season recap email. Stuff a Bus picks open Friday, Nov. 27 at 5 p.m. Eastern."
+      : `${early ? "Close this broadcast week early" : "Finalize this week’s scores"} and award the ${bonusLabel}? You won’t be able to edit these totals afterward.`;
     if (!window.confirm(warning)) return;
     setFinalizing(true);
     setMessage("");
@@ -299,7 +298,7 @@ export default function ScoreThisWeek() {
     }
     setFinalizing(false);
     setFinalized(true);
-    setMessage(`Scores finalized${early ? " early" : ""} for ${result.players} ${result.players === 1 ? "player" : "players"}. The ${predictionLabel} has been awarded. ${result.deliveryPending ? "Results emails are queued for another delivery attempt." : `Results emails sent to ${result.emailed} players.`}`);
+    setMessage(`Scores finalized${early ? " early" : ""} for ${result.players} ${result.players === 1 ? "player" : "players"}. The ${bonusLabel} has been awarded. ${result.deliveryPending ? "Results emails are queued for another delivery attempt." : `Results emails sent to ${result.emailed} players.`}`);
   }
 
   if (!allowed) {
@@ -311,8 +310,8 @@ export default function ScoreThisWeek() {
     );
   }
 
-  if (!hasScheduledPlay(week)) {
-    return <div className="panel"><h1>Score this week</h1><p>No scoring is scheduled this week.</p></div>;
+  if (seasonBreak) {
+    return <section className="panel"><h1>Season break</h1>{week < STUFF_A_BUS_WEEK ? <p>Scoring resumes with Stuff a Bus the week of Nov. 30.</p> : <p>Scoring will resume when the next season is scheduled.</p>}</section>;
   }
 
   return (
@@ -446,50 +445,46 @@ export default function ScoreThisWeek() {
             </div>
           </div>
       ))}
-      {specialWeek && (
+      {stuffABus && (
         <section className="panel">
-          <h2>Stuff a Bus final total</h2>
-          <p className="muted">Enter the official total for the entire event. This opens December 4.</p>
-          <label htmlFor="stuff-a-bus-total">Total buses stuffed</label>
-          <input id="stuff-a-bus-total" type="number" min="0" max="500" step="1"
-            disabled={!canSetBusTotal || busy || finalized} value={busDraft}
+          <h2>Stuff a Bus · official weekly total</h2>
+          <p className="muted">Once the toy drive ends on Friday, enter the total number of buses filled across the whole week.</p>
+          <label htmlFor="bus-total">Total buses filled</label>
+          <input id="bus-total" type="number" min="0" max="500" step="1" value={busDraft}
+            disabled={busy || finalized || easternDay < "2026-12-04"}
             onChange={(event) => setBusDraft(event.target.value)} />
-          {!finalized && <button type="button"
-            disabled={!canSetBusTotal || busy || !hasUnsavedBusTotal}
-            onClick={() => void saveBusTotal()}>
-            {saving === "stuff-a-bus" ? "Saving…" : "Save final bus total"}
-          </button>}
-          {busMessage && <p role="status">{busMessage}</p>}
+          {!finalized && <button type="button" onClick={() => void saveBusTotal()}
+            disabled={busy || !needsBusTotal || !busDraft || easternDay < "2026-12-04"}>Save official total</button>}
         </section>
       )}
       <section className="panel">
-        <h2>Finalize scores</h2>
+        <h2>{seasonFinale ? "Finalize Week 7 and Season One" : "Finalize scores"}</h2>
         <p className="muted">
-          Check every occurrence total before finalizing to award the {predictionLabel}.
+          Check every occurrence total before finalizing to award the {bonusLabel}.
           You can close a short broadcast week early after Monday&apos;s picks lock.
           An exact guess earns
           50 points; each number away earns two fewer, with a minimum of five.
           Scores and occurrence totals cannot be changed after finalization.
         </p>
         {finalized ? (
-          <p className="success">This week’s scores are finalized. The {predictionLabel} is included.</p>
+          <p className="success">This week’s scores are finalized. The {bonusLabel} is included.</p>
         ) : (
           <div className="score-finalize-actions">
-            <button type="button" disabled={!canFinalize || busy || hasUnsavedTotals || !predictionReady}
+            <button type="button" disabled={!canFinalize || busy || hasUnsavedTotals || needsBusTotal}
               onClick={() => void finalizeScores()}>
-              {finalizing ? "Finalizing…" : `Finalize scores and award ${predictionLabel}`}
+              {finalizing ? "Finalizing…" : seasonFinale ? "Finalize Week 7 and Season One" : "Finalize scores and award bonus"}
             </button>
             {!canFinalize && (
               <button type="button" className="secondary-button"
-                disabled={!canCloseEarly || busy || hasUnsavedTotals || !predictionReady}
+                disabled={!canCloseEarly || busy || hasUnsavedTotals || needsBusTotal}
                 onClick={() => void finalizeScores(true)}>
-                {finalizing ? "Closing week…" : "Close this week early and award bonus"}
+                {finalizing ? "Closing week…" : seasonFinale ? "Close Week 7 early and finalize Season One" : "Close this week early and award bonus"}
               </button>
             )}
           </div>
         )}
         {!canFinalize && !finalized && (
-          <p className="muted">Normal finalization is available Friday at 5:00 p.m. Eastern. Early closing freezes this week’s scores.</p>
+          <p className="muted">Normal finalization is available Friday at 5:00 p.m. Eastern. Early closing freezes this week’s scores now. {seasonFinale && "Stuff a Bus picks open Friday, Nov. 27 at 5 p.m. Eastern."}</p>
         )}
         {hasUnsavedTotals && !finalized && <p className="muted">Save your edited occurrence totals before closing the week.</p>}
       </section>

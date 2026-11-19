@@ -41,11 +41,11 @@ export default function ScoringLog({ currentWeek }: { currentWeek: string }) {
           : null,
       ]);
       const finalBuses = busResult?.data?.scores_finalized_at
-        ? await db.from("weeks").select("stuff_a_bus_total").eq("id", selectedWeek).maybeSingle()
+        ? await db.from("stuff_a_bus_totals").select("buses").eq("week_id", selectedWeek).maybeSingle()
         : null;
       if (!active) return;
       setLoading(false);
-      setBusTotal(finalBuses?.data?.stuff_a_bus_total ?? null);
+      setBusTotal(finalBuses?.data?.buses ?? null);
       if (completed.error || counts.error || busResult?.error || finalBuses?.error) {
         setError("The completed daily scores could not be loaded. Please try again.");
         return;

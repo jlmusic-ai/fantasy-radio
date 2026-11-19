@@ -6,12 +6,13 @@ import {
   calendarScoreWeek,
   defaultLockAt,
   FIRST_SEASON_END,
+  FIRST_SEASON_FINALE,
   FIRST_SEASON_START,
   formatDate,
+  isBroadcastScoringWindow,
   hasScheduledPlay,
   STUFF_A_BUS_TOPIC,
   STUFF_A_BUS_WEEK,
-  isBroadcastScoringWindow,
   pickingWeek,
   weekStart,
 } from "../lib/game";
@@ -74,6 +75,11 @@ type SeasonStats = {
   bestWeek: string | null;
   twoHundredPointWeeks: number;
 };
+function scoreboardWeek(now: Date) {
+  const current = calendarScoreWeek(now);
+  return hasScheduledPlay(current) ? current : current < STUFF_A_BUS_WEEK ? FIRST_SEASON_FINALE : STUFF_A_BUS_WEEK;
+}
+
 export default function Game() {
   const db = browserClient();
   const [user, setUser] = useState<string | null>(null),
@@ -81,8 +87,8 @@ export default function Game() {
     [previousTopicNames, setPreviousTopicNames] = useState<Set<string> | null>(null),
     [picks, setPicks] = useState<Record<string, number>>({}),
     [birthdayGuess, setBirthdayGuess] = useState<number | null>(null),
+    [officialBusTotal, setOfficialBusTotal] = useState<number | null>(null),
     [bonusFinalized, setBonusFinalized] = useState(false),
-    [busesStuffed, setBusesStuffed] = useState<number | null>(null),
     [events, setEvents] = useState<Record<string, number>>({}),
     [completedPickUsers, setCompletedPickUsers] = useState<Set<string>>(
       new Set(),
@@ -104,7 +110,7 @@ export default function Game() {
     [tab, setTab] = useState("picks"),
     [loading, setLoading] = useState(true);
   const [scoreRevision, setScoreRevision] = useState(0);
-  const [leaderboardWeek, setLeaderboardWeek] = useState(() => calendarScoreWeek(new Date()));
+  const [leaderboardWeek, setLeaderboardWeek] = useState(() => scoreboardWeek(new Date()));
   const [weeklyActivePlayers, setWeeklyActivePlayers] = useState<number | null>(null);
   const [leaderboardLocked, setLeaderboardLocked] = useState(false);
   const [leaderboardFinalized, setLeaderboardFinalized] = useState(false);
@@ -140,7 +146,7 @@ export default function Game() {
     setUser(u?.id || null);
     const pickWindowData = pickWindow.data as PickWindow | null;
     const w = pickWindowData?.active_week || pickingWeek(new Date());
-    const scoreWeek = calendarScoreWeek(new Date());
+    const scoreWeek = scoreboardWeek(new Date());
     if (leaderboardWeekRef.current !== scoreWeek) {
       leaderboardWeekRef.current = scoreWeek;
       setLeaderboardWeek(scoreWeek);
@@ -158,14 +164,14 @@ export default function Game() {
       weekRef.current = w;
       setWeek(w);
     }
-    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonStatsRows, finalization, dailyStatus, priorTopics, currentTopics, scoreFinalization, scoreWeekSettings, scoreTopics, scoreLines, scoreLineupStatus, seasonParticipants] =
+    const [cats, ws, ev, lb, sl, profiles, lineupStatus, seasonStatsRows, finalization, dailyStatus, priorTopics, currentTopics, scoreFinalization, scoreWeekSettings, scoreTopics, scoreLines, scoreLineupStatus, seasonParticipants, busTotal] =
       await Promise.all([
       db
         .from("categories")
         .select("id,name,lineup_subtitle,scoring_type,display_order,active")
         .order("display_order")
         .order("name"),
-      db.from("weeks").select("lock_at,stuff_a_bus_total").eq("id", w).maybeSingle(),
+      db.from("weeks").select("lock_at").eq("id", w).maybeSingle(),
       db.from("daily_scoring_lines").select("category_id,quantity").eq("week_id", w),
       db
         .from("weekly_scores")
@@ -208,6 +214,9 @@ export default function Game() {
       db.from("weekly_lineup_status").select("user_id")
         .eq("week_id", scoreWeek).eq("allocated_points", 100).limit(1000),
       loadSeasonParticipants(db, FIRST_SEASON_START, FIRST_SEASON_END),
+      w === STUFF_A_BUS_WEEK
+        ? db.from("stuff_a_bus_totals").select("buses").eq("week_id", w).maybeSingle()
+        : Promise.resolve({ data: null }),
     ]);
     setPreviousTopicNames(priorTopics.error ? null :
       new Set((priorTopics.data || []).map((topic) => topic.topic_name.trim().toLowerCase())));
@@ -216,12 +225,16 @@ export default function Game() {
     setDailyScoringComplete(Boolean(todayStatus?.completed));
     bonusFinalizedRef.current = Boolean(finalization.data?.scores_finalized_at);
     setBonusFinalized(bonusFinalizedRef.current);
-    setBusesStuffed(w === STUFF_A_BUS_WEEK ? ws.data?.stuff_a_bus_total ?? null : null);
+    setOfficialBusTotal(busTotal.data?.buses ?? null);
     const lockAt =
       pickWindowData?.closes_at || ws.data?.lock_at || defaultLockAt(w);
     const isLocked = !hasScheduledPlay(w) || (pickWindowData?.is_locked ?? Date.now() >= new Date(lockAt).getTime());
     if (!cats.error) {
-      const allTopics = cats.data || [];
+      const allTopics = (cats.data || []).map((topic) =>
+        w === STUFF_A_BUS_WEEK && topic.scoring_type === "closest_guess"
+          ? { ...topic, name: STUFF_A_BUS_TOPIC, lineup_subtitle: "" }
+          : topic,
+      );
       if (isLocked && !currentTopics.error && currentTopics.data?.length) {
         const savedTopics = currentTopics.data.map((topic, index) => {
           const metadata = allTopics.find((category) => category.id === topic.category_id);
@@ -378,14 +391,14 @@ export default function Game() {
       const [pickWindowResult, dailyStatusResult, scoreFinalResult] = await Promise.all([
         db.rpc("active_pick_window").single(),
         db.rpc("today_scoring_status").single(),
-        db.from("finalized_weeks").select("scores_finalized_at").eq("week_id", calendarScoreWeek(nowForStatus)).maybeSingle(),
+        db.from("finalized_weeks").select("scores_finalized_at").eq("week_id", scoreboardWeek(nowForStatus)).maybeSingle(),
       ]);
       const nextWindow = pickWindowResult.data as PickWindow | null;
       const todayStatus = dailyStatusResult.data as DailyScoringStatus | null;
       setDailyScoringComplete(
         Boolean(todayStatus?.completed),
       );
-      if (calendarScoreWeek(nowForStatus) !== leaderboardWeekRef.current ||
+      if (scoreboardWeek(nowForStatus) !== leaderboardWeekRef.current ||
           (!scoreFinalResult.error && Boolean(scoreFinalResult.data?.scores_finalized_at) !== leaderboardFinalizedRef.current)) {
         await load({ showLoading: false, hydratePicks: false });
         return;
@@ -438,8 +451,8 @@ export default function Game() {
       db.removeChannel(channel);
     };
   }, []);
-  const specialWeek = week === STUFF_A_BUS_WEEK;
-  const offseason = !hasScheduledPlay(week);
+  const stuffABus = week === STUFF_A_BUS_WEEK;
+  const seasonBreak = !hasScheduledPlay(week);
   const allocationCategories = categories.filter(
       (c) => c.scoring_type === "allocation",
     ),
@@ -447,7 +460,7 @@ export default function Game() {
       (c) => c.scoring_type === "closest_guess",
     ),
     total = allocationCategories.reduce((a, c) => a + (picks[c.id] || 0), 0),
-    birthdayActual = specialWeek ? busesStuffed ?? 0 : birthdayCategory ? events[birthdayCategory.id] || 0 : 0,
+    birthdayActual = stuffABus ? officialBusTotal ?? 0 : birthdayCategory ? events[birthdayCategory.id] || 0 : 0,
     bonus = bonusFinalized ? birthdayBonus(birthdayGuess, birthdayActual) : 0,
     selectedWeeklyPlayer = leaders.find(
       (player) => player.user_id === selectedWeeklyUserId,
@@ -539,7 +552,7 @@ export default function Game() {
     const data = await response.json();
     setMessage(
       response.ok
-        ? specialWeek ? "Lineup and Stuff a Bus prediction saved successfully." : "Lineup and birthday guess saved successfully."
+        ? stuffABus ? "Lineup and Stuff a Bus guess saved successfully." : "Lineup and birthday guess saved successfully."
         : data.error || "Unable to save",
     );
     if (response.ok) {
@@ -558,11 +571,10 @@ export default function Game() {
           seasonRank={currentSeasonRank} seasonPlayers={seasonLeaders.length} />
         <div className="panel">
           <div className="muted">LINEUP STATUS</div>
-          <h2 className={!loading && !locked ? "picks-open-heading" : undefined}>{loading ? "Checking lineup…" : offseason ? "Season break" : locked ? "Locked" : "Open for picks"}</h2>
-          {!offseason && <div className="muted">{total} / 100 points allocated</div>}
+          <h2 className={!loading && !locked ? "picks-open-heading" : undefined}>{loading ? "Checking lineup…" : seasonBreak ? "Season break" : locked ? "Locked" : "Open for picks"}</h2>
+          {!seasonBreak && <div className="muted">{total} / 100 points allocated</div>}
         </div>
       </div>
-      {week >= STUFF_A_BUS_WEEK && <p><a href="/stuff-a-bus">Stuff a Bus special season</a></p>}
       {showScoringStatus && <div
         className={`daily-scoring-status ${
           bonusFinalized || dailyScoringComplete ? "daily-scoring-complete" : "daily-scoring-pending"
@@ -571,13 +583,13 @@ export default function Game() {
       >
         <strong>
           {bonusFinalized
-            ? specialWeek ? "This week’s scores and Stuff a Bus results are final." : "This week’s scores are final, including the birthday bonus."
+            ? stuffABus ? "This week’s scores are final, including the Stuff a Bus bonus." : "This week’s scores are final, including the birthday bonus."
             : dailyScoringComplete
             ? "Today’s scoring is complete."
             : "Today’s scoring has not yet been completed."}
         </strong>
       </div>}
-      <WeeklyRecap userId={user} finalized={bonusFinalized} />
+      {!seasonBreak && <WeeklyRecap userId={user} finalized={bonusFinalized} />}
       <div className="tabs">
         <button
           className={tab === "picks" ? "active" : ""}
@@ -612,14 +624,14 @@ export default function Game() {
       </div>
       {loading ? (
         <p>Loading game…</p>
-      ) : tab === "picks" && offseason ? (
+      ) : tab === "picks" && seasonBreak ? (
         <div className="panel">
-          <h2>No picks this week</h2>
-          {week < STUFF_A_BUS_WEEK && <p>Stuff a Bus picks open Friday, November 27 at 5:00 p.m. Eastern for the November 30–December 4 special season.</p>}
+          <h2>Season break</h2>
+          {week < STUFF_A_BUS_WEEK ? <p>Stuff a Bus picks open Friday, Nov. 27 at 5 p.m. Eastern.</p> : <p>Picks will reopen when the next season is scheduled.</p>}
         </div>
       ) : tab === "picks" ? (
         <div className="panel">
-          <h2>{specialWeek ? "Stuff a Bus lineup" : "Weekly lineup"}</h2>
+          <h2>{stuffABus ? "Stuff a Bus lineup" : "Weekly lineup"}</h2>
           {!user && (
             <p>
               <a href="/signup">Create an account</a> or{" "}
@@ -690,29 +702,29 @@ export default function Game() {
               </div>
             );
           })}
-          {(birthdayCategory || specialWeek) && (
+          {birthdayCategory && (
             <div className="panel">
               <h3 className="lineup-topic-title">
-                {specialWeek ? STUFF_A_BUS_TOPIC : birthdayCategory?.name}
-                {!specialWeek && birthdayCategory && !locked && previousTopicNames &&
+                {birthdayCategory.name}
+                {!stuffABus && !locked && previousTopicNames &&
                   !previousTopicNames.has(birthdayCategory.name.trim().toLowerCase()) && (
                     <span className="new-topic-badge" title="This topic wasn’t in last week’s lineup">New this week</span>
                   )}
               </h3>
-              {!specialWeek && birthdayCategory?.lineup_subtitle.trim() && (
+              {birthdayCategory.lineup_subtitle.trim() && (
                 <p className="muted lineup-subtitle">{birthdayCategory.lineup_subtitle}</p>
               )}
               <p className="muted">
                 {bonusFinalized
-                  ? `${birthdayActual} ${specialWeek ? "buses stuffed" : "occurrences"} · ${bonus} bonus points earned`
-                  : specialWeek
-                    ? "Predict the total number of buses Mikey and Bob will fill with toys over the whole event. The closest guess wins, and equally close guesses share the win."
+                  ? `${birthdayActual} ${stuffABus ? "buses filled" : "occurrences"} · ${bonus} bonus points earned`
+                  : stuffABus
+                    ? "Enter one prediction for the total number of buses filled during the entire Nov. 30–Dec. 4 toy drive. Closest guess wins the Stuff a Bus challenge."
                     : "Bonus points are awarded after the commissioner finalizes this week’s scores."}
               </p>
               <label>
                 Your guess
                 <input
-                  aria-label={specialWeek ? "Total buses stuffed prediction" : "Birthday wishes guess"}
+                  aria-label={stuffABus ? "Total buses filled guess" : "Birthday wishes guess"}
                   type="number"
                   min="0"
                   max="500"
@@ -768,7 +780,7 @@ export default function Game() {
           </p>}
           {tab === "season" && (
             <p className="muted season-leaderboard-dates">
-              Official season: {formatDate(FIRST_SEASON_START)} through{" "}
+              Season One: {formatDate(FIRST_SEASON_START)} through{" "}
               {formatDate(FIRST_SEASON_END)}
               <br />Season points are added when each week is finalized.
             </p>
@@ -970,7 +982,7 @@ export default function Game() {
                   <p className="muted season-stats-note">No official season weeks played yet.</p>
                 )}
                 <p className="muted season-stats-note">
-                  Official season: {formatDate(FIRST_SEASON_START)} through {formatDate(FIRST_SEASON_END)}
+                  Season One: {formatDate(FIRST_SEASON_START)} through {formatDate(FIRST_SEASON_END)}
                 </p>
               </section>
             )}

@@ -1,4 +1,5 @@
 import Game from "./game";
+import SeasonAnnouncements from "./season-announcements";
 import RulesContent from "./rules-content";
 import PhotoReminder from "./photo-reminder";
 import ConfirmationLanding from "./confirmation-landing";
@@ -15,6 +16,6 @@ export default async function Home() {
       user?.user_metadata?.facebook_username_pending === true) redirect("/profile");
 
   return user
-    ? <><PhotoReminder /><Game /></>
-    : <><ConfirmationLanding /><RulesContent /></>;
+    ? <><PhotoReminder /><SeasonAnnouncements /><Game /></>
+    : <><ConfirmationLanding /><SeasonAnnouncements /><RulesContent /></>;
 }

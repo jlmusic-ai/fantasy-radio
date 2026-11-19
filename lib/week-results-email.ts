@@ -1,3 +1,7 @@
+import { emailDatabase as supabaseRequest, optedOutUsers, unsubscribeFooter, unsubscribeHeaders, unsubscribeUrl } from "./email-unsubscribe";
+import { FIRST_SEASON_START, FIRST_SEASON_END, FIRST_SEASON_FINALE, STUFF_A_BUS_WEEK } from "./game";
+import { loadSeasonPodium, type PodiumEntry } from "./season-results";
+
 const SITE_URL = "https://mooberball.com";
 function picksReminder(now = new Date()) {
   const friday = new Intl.DateTimeFormat("en-US", {
@@ -5,8 +9,6 @@ function picksReminder(now = new Date()) {
   }).format(now) === "Fri";
   return `Reminder: Next week's picks will open ${friday ? "" : "Friday "}at 5pm EST!`;
 }
-const FIRST_SEASON_START = "2026-10-05";
-const FIRST_SEASON_END = "2026-11-20";
 
 type Recipient = {
   user_id: string;
@@ -37,26 +39,70 @@ function weekLabel(week: string) {
   return `week of ${week.slice(5, 7)}-${week.slice(8, 10)}-${week.slice(0, 4)}`;
 }
 
-function resultHtml(week: string, recipient: Recipient, reminder: string) {
+const recap = "That’s a wrap on the first season of Mooberball! Seven weeks of picks, Pittsburgh Scanner stories, and birthday wishes are in the books. Thanks for playing along and making our first season such a good time.";
+const upcomingTitle = "Up next: Stuff a Bus · Nov. 30–Dec. 4";
+const upcoming = "Season One is over, and we’re taking a week off. For the Stuff a Bus special, make your regular picks and give us one guess for how many buses Mikey and Bob will fill with toys for Toys for Tots. Closest guess wins the Stuff a Bus challenge!";
+const medals = ["🏆", "🥈", "🥉"];
+const points = (score: number) => new Intl.NumberFormat("en-US").format(score);
+
+function congratulations(podium: PodiumEntry[]) {
+  const champions = podium.filter((entry) => entry.place === 1).map((entry) => entry.username);
+  if (champions.length === 1) return `Congratulations to our first-ever Mooberball champion, ${champions[0]}!`;
+  if (champions.length > 1) return `Congratulations to our Season One co-champions, ${champions.join(" and ")}!`;
+  return "";
+}
+
+export function renderWeekResult(week: string, recipient: Recipient, podium?: PodiumEntry[], now = new Date()) {
+  const finale = week === FIRST_SEASON_FINALE;
+  if (finale && !podium) throw new Error("Season One standings are required for its finale email");
+  const reminder = week === STUFF_A_BUS_WEEK ? "" : picksReminder(now);
+  const subject = finale ? "Mooberball Season One Final Results 🏆"
+    : `Mooberball ${weekLabel(week)} Results: ${ordinal(recipient.place)} Place`;
+  const result = `${recipient.tied ? "Tied for " : ""}${ordinal(recipient.place)} place`;
+  const footer = finale ? [
+    "Season One top 3",
+    ...(podium ?? []).map((entry) => `${entry.place}. ${medals[entry.place - 1]} ${entry.username} · ${points(entry.score)} points`),
+    "", congratulations(podium ?? []), "", upcomingTitle, upcoming,
+  ].join("\n") : reminder;
+  const text = [
+    "Howdy Moober!", finale ? recap : `${recipient.username}, the scores are final.`,
+    `${finale ? "Your Week 7 finish: " : ""}${result} · ${points(recipient.score)} ${recipient.score === 1 ? "point" : "points"}`,
+    footer, `See final scores: ${SITE_URL}/`, finale ? "Happy Birthday, Bob!" : "",
+    `Unsubscribe from all Mooberball emails: ${unsubscribeUrl(recipient.user_id)}`,
+  ].filter(Boolean).join("\n\n");
+  return { subject, text, html: resultHtml(week, recipient, reminder, finale ? podium : undefined) };
+}
+
+function resultHtml(week: string, recipient: Recipient, reminder: string, podium?: PodiumEntry[]) {
   const result = `${recipient.tied ? "Tied for " : ""}${ordinal(recipient.place)} place`;
   const name = escapeHtml(recipient.username);
+  const finale = podium !== undefined;
+  const seasonBlock = finale ? `
+        <h2 style="margin:26px 0 12px;color:#ffca05;font-size:23px;">Season One top 3</h2>
+        <div style="padding:16px 20px;border:1px solid #5a4600;border-radius:12px;background:#242017;">
+          ${podium.map((entry) => `<p style="margin:8px 0;color:#fff;font-size:17px;">${entry.place}. ${medals[entry.place - 1]} <strong>${escapeHtml(entry.username)}</strong> · ${points(entry.score)} points</p>`).join("")}
+        </div>
+        <p style="margin:18px 0;color:#e2e2e2;font-size:17px;line-height:1.5;">${escapeHtml(congratulations(podium))}</p>
+        <h2 style="margin:24px 0 8px;color:#ffca05;font-size:21px;">${upcomingTitle}</h2>
+        <p style="margin:0 0 20px;color:#e2e2e2;font-size:16px;line-height:1.5;">${upcoming}</p>` : "";
   return `<!doctype html>
 <html lang="en">
-  <head><meta charset="utf-8"><title>Mooberball weekly results</title></head>
+  <head><meta charset="utf-8"><title>${finale ? "Mooberball Season One final results" : "Mooberball weekly results"}</title></head>
   <body style="margin:0;background:#050505;color:#ffffff;font-family:Arial,Helvetica,sans-serif;">
     <div style="padding:32px 16px;background:#0b0b0b;">
       <div style="max-width:680px;margin:0 auto;padding:30px;border:1px solid #4d3d00;border-radius:18px;background:#151515;">
         <img src="${SITE_URL}/mooberball-logo.png" width="180" alt="Mooberball" style="display:block;width:180px;max-width:70%;height:auto;margin:0 0 26px;">
-        <p style="margin:0 0 8px;color:#ffca05;font-size:13px;font-weight:900;letter-spacing:.15em;text-transform:uppercase;">${escapeHtml(weekLabel(week))} · final results</p>
+        <p style="margin:0 0 8px;color:#ffca05;font-size:13px;font-weight:900;letter-spacing:.15em;text-transform:uppercase;">${finale ? "Season One" : escapeHtml(weekLabel(week))} · final results</p>
         <h1 style="margin:0 0 18px;color:#ffca05;font-size:36px;line-height:1.1;text-transform:uppercase;">Howdy Moober!</h1>
-        <p style="margin:0 0 18px;color:#e2e2e2;font-size:19px;line-height:1.6;">${name}, the scores are final. Here is where you finished this week:</p>
+        <p style="margin:0 0 18px;color:#e2e2e2;font-size:19px;line-height:1.6;">${finale ? recap : `${name}, the scores are final. Here is where you finished this week:`}</p>
         <div style="padding:20px;border:1px solid #5a4600;border-radius:12px;background:#242017;">
+          ${finale ? '<p style="margin:0 0 8px;color:#e2e2e2;font-size:15px;">Your Week 7 finish</p>' : ""}
           <p style="margin:0 0 8px;color:#ffca05;font-size:28px;font-weight:800;">${result}</p>
-          <p style="margin:0;color:#ffffff;font-size:19px;">${recipient.score} ${recipient.score === 1 ? "point" : "points"}</p>
+          <p style="margin:0;color:#ffffff;font-size:19px;">${points(recipient.score)} ${recipient.score === 1 ? "point" : "points"}</p>
         </div>
-        <p style="margin:22px 0;color:#e2e2e2;font-size:16px;line-height:1.5;">See the weekly leaderboard and how your points were earned on Mooberball.</p>
+        ${finale ? seasonBlock : '<p style="margin:22px 0;color:#e2e2e2;font-size:16px;line-height:1.5;">See the weekly leaderboard and how your points were earned on Mooberball.</p>'}
         <a href="${SITE_URL}/" style="display:inline-block;padding:14px 20px;border-radius:9px;background:#ffca05;color:#151515;font-size:16px;font-weight:800;text-decoration:none;">See final scores</a>
-        <p style="margin:24px 0 0;color:#ffca05;font-size:16px;line-height:1.5;">${escapeHtml(reminder)}</p>
+        ${finale || reminder ? `<p style="margin:24px 0 0;color:#ffca05;font-size:16px;line-height:1.5;">${finale ? "Happy Birthday, Bob!" : escapeHtml(reminder)}</p>` : ""}
         <p style="margin:24px 0 0;color:#999999;font-size:12px;line-height:1.5;">Mooberball is an independent fan-made game.</p>
         ${unsubscribeFooter(unsubscribeUrl(recipient.user_id))}
       </div>
@@ -65,23 +111,13 @@ function resultHtml(week: string, recipient: Recipient, reminder: string) {
 </html>`;
 }
 
-async function supabaseRequest(path: string, secret: string, init: RequestInit = {}) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!url) throw new Error("Supabase URL is not configured");
-  const headers = new Headers(init.headers);
-  headers.set("apikey", secret);
-  headers.set("Authorization", `Bearer ${secret}`);
-  headers.set("Content-Type", "application/json");
-  return fetch(`${url}${path}`, { ...init, headers, cache: "no-store" });
-}
-
 export async function dispatchWeekResults(week: string, maxBatches = 8) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(week)) throw new Error("Invalid week");
   const secret = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
   const resendKey = process.env.RESEND_API_KEY;
   const from = process.env.REMINDER_FROM_EMAIL;
   if (!secret || !resendKey || !from) throw new Error("Results email service is not configured");
-  const reminder = picksReminder();
+  const podium = week === FIRST_SEASON_FINALE ? await loadSeasonPodium(secret) : undefined;
   let sent = 0;
 
   for (let index = 0; index < maxBatches; index++) {
@@ -111,9 +147,7 @@ export async function dispatchWeekResults(week: string, maxBatches = 8) {
         },
         body: JSON.stringify(recipients.map((recipient) => ({
           from, to: [recipient.email],
-          subject: `Mooberball ${weekLabel(week)} Results: ${ordinal(recipient.place)} Place`,
-          html: resultHtml(week, recipient, reminder),
-          text: `Howdy Moober! ${recipient.username}, the scores are final. You finished ${recipient.tied ? "tied for " : ""}${ordinal(recipient.place)} place with ${recipient.score} ${recipient.score === 1 ? "point" : "points"}. See final scores: ${SITE_URL}/\n\n${reminder}\n\nUnsubscribe from all Mooberball emails: ${unsubscribeUrl(recipient.user_id)}`,
+          ...renderWeekResult(week, recipient, podium),
           headers: unsubscribeHeaders(recipient.user_id),
         }))),
       };
@@ -152,4 +186,3 @@ export async function pendingResultWeeks() {
   const rows = (await response.json()) as { week_id: string }[];
   return [...new Set(rows.map((row) => row.week_id))];
 }
-import { optedOutUsers, unsubscribeFooter, unsubscribeHeaders, unsubscribeUrl } from "./email-unsubscribe";

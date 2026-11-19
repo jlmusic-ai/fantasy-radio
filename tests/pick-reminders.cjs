@@ -12,7 +12,7 @@ const moduleObject = {exports:{}};
 const code=ts.transpileModule(fs.readFileSync('app/api/cron/pick-reminders/route.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
 new Function('require','module','exports',code)(name=>name.endsWith('/email-unsubscribe')?{
   optedOutUsers:async()=>new Set(scenario.optedOut||[]),unsubscribeFooter:()=>'',unsubscribeHeaders:()=>({}),unsubscribeUrl:id=>'https://example.test/unsubscribe/'+id,
-}:require(name),moduleObject,moduleObject.exports);
+}:name.endsWith("/game")?require("../lib/game.ts"):require(name),moduleObject,moduleObject.exports);
 const player=(id,extra={})=>({id,email:id+'@example.test',email_confirmed_at:'confirmed',...extra});
 function idsFrom(url){return (url.searchParams.get('user_id')||'').replace(/^in\.\(|\)$/g,'').split(',').filter(Boolean)}
 async function run(options={}){
@@ -66,5 +66,9 @@ async function run(options={}){
  assert.equal(r.sends.length,0);assert(r.pages.some(x=>x[0]==='status'&&x[1]===1000));assert(r.pages.some(x=>x[0]==='profiles'&&x[1]===1000));
  r=await run({instant:'2026-10-25T17:15:00Z'});assert(r.requestedWeeks.every(x=>x==='eq.2026-10-26'));
  r=await run({instant:'2026-11-01T17:15:00Z'});assert.equal(r.body.skipped,true);assert.equal(r.sends.length,0);
+ r=await run({instant:'2026-11-22T18:15:00Z'});assert.equal(r.body.skipped,true);assert.equal(r.sends.length,0);
+ r=await run({instant:'2026-11-29T18:15:00Z'});assert.match(r.sends[0].subject,/Stuff a Bus/);
+ assert(r.requestedWeeks.every(x=>x==='eq.2026-11-30'));
+ r=await run({instant:'2026-12-06T18:15:00Z'});assert.equal(r.body.skipped,true);assert.equal(r.sends.length,0);
  console.log('PASS: submitted/hidden/opted-out accounts excluded, pre-send recheck, fail-closed errors, duplicate protection, pagination, batching, and DST target week. No real emails sent.');
 })().catch(error=>{console.error(error);process.exitCode=1}).finally(()=>{global.Date=NativeDate;global.fetch=nativeFetch;for(const key of envKeys){if(savedEnv[key]===undefined)delete process.env[key];else process.env[key]=savedEnv[key];}});

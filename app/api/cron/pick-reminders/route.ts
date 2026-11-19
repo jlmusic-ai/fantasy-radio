@@ -1,9 +1,8 @@
+import { hasScheduledPlay, STUFF_A_BUS_WEEK } from "../../../../lib/game";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 import { optedOutUsers, unsubscribeFooter, unsubscribeHeaders, unsubscribeUrl } from "../../../../lib/email-unsubscribe";
-
-import { FIRST_SEASON_START, FIRST_SEASON_END, hasScheduledPlay, STUFF_A_BUS_WEEK } from "../../../../lib/game";
 
 type AuthUser = {
   id: string;
@@ -17,7 +16,8 @@ type ReminderRecipient = {
 };
 
 const SITE_URL = "https://mooberball.com";
-
+const FIRST_SEASON_START = "2026-10-05";
+const FIRST_SEASON_END = "2026-11-20";
 
 function easternDateParts(now: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -53,7 +53,7 @@ function seasonWeekNumber(weekId: string) {
 }
 
 function reminderSubject(weekId: string) {
-  if (weekId === STUFF_A_BUS_WEEK) return "Mooberball Stuff a Bus, Lock In Your Picks!";
+  if (weekId === STUFF_A_BUS_WEEK) return "Mooberball Stuff a Bus: Lock In Your Picks!";
   if (weekId >= FIRST_SEASON_START && weekId <= FIRST_SEASON_END) {
     return `Mooberball Week ${seasonWeekNumber(weekId)}, Lock In Your Picks!`;
   }
@@ -167,9 +167,7 @@ export async function GET(request: Request) {
   }
 
   const weekId = nextMonday(parts);
-  if (!hasScheduledPlay(weekId)) {
-    return Response.json({ skipped: true, reason: "No scheduled play" });
-  }
+  if (!hasScheduledPlay(weekId)) return Response.json({ skipped: true, reason: "Season break" });
   const [usersResult, completeResult, visibleResult] = await Promise.allSettled([
     loadUsers(supabaseSecret),
     loadIds(

@@ -10,16 +10,17 @@ export default async function StuffABusPage() {
   const { data: { user } } = await db.auth.getUser();
   if (!user) redirect("/login");
 
-  const [finalization, schedule] = await Promise.all([
+  const [finalization, schedule, busResult] = await Promise.all([
     db.from("finalized_weeks").select("scores_finalized_at").eq("week_id", STUFF_A_BUS_WEEK).maybeSingle(),
-    db.from("weeks").select("lock_at,stuff_a_bus_total").eq("id", STUFF_A_BUS_WEEK).maybeSingle(),
+    db.from("weeks").select("lock_at").eq("id", STUFF_A_BUS_WEEK).maybeSingle(),
+    db.from("stuff_a_bus_totals").select("buses").eq("week_id", STUFF_A_BUS_WEEK).maybeSingle(),
   ]);
-  const total = schedule.data?.stuff_a_bus_total;
+  const total = busResult.data?.buses;
   const finalized = Boolean(finalization.data?.scores_finalized_at);
   const today = Date.now();
   const picking = today >= Date.parse(STUFF_A_BUS_PICK_OPEN) &&
     today < Date.parse(schedule.data?.lock_at ?? "2026-11-30T11:00:00Z");
-  const loadFailed = Boolean(finalization.error || schedule.error);
+  const loadFailed = Boolean(finalization.error || schedule.error || busResult.error);
   const showResults = finalized && total != null;
   return (
     <div className="panel">
@@ -37,40 +38,19 @@ export default async function StuffABusPage() {
 }
 
 async function StuffABusResults({ db, total }: { db: Awaited<ReturnType<typeof serverClient>>; total: number }) {
-  const predictions: { user_id: string; guess: number }[] = [];
+  const eligible: { user_id: string; username: string; guess: number; distance: number }[] = [];
   for (let offset = 0; ; offset += 500) {
-    const { data, error } = await db.from("weekly_score_details").select("user_id,guess")
-      .eq("week_id", STUFF_A_BUS_WEEK).eq("scoring_type", "closest_guess").not("guess", "is", null)
-      .order("user_id").range(offset, offset + 499);
+    const { data, error } = await db.from("stuff_a_bus_results").select("user_id,username,guess,distance")
+      .order("distance").order("username").order("user_id").range(offset, offset + 499);
     if (error) return <p role="alert">Unable to load Stuff a Bus results.</p>;
-    predictions.push(...data);
+    eligible.push(...data);
     if (data.length < 500) break;
   }
-  const eligible: { username: string; guess: number; difference: number; id: string }[] = [];
-  for (let offset = 0; offset < predictions.length; offset += 100) {
-    const guesses = new Map(predictions.slice(offset, offset + 100)
-      .map(({ user_id, guess }) => [user_id, Number(guess)]));
-    const ids = [...guesses.keys()];
-    const [profiles, lineups] = await Promise.all([
-      db.from("profiles").select("id,username").eq("hide_from_leaderboards", false).in("id", ids),
-      db.from("weekly_lineup_status").select("user_id").eq("week_id", STUFF_A_BUS_WEEK)
-        .eq("allocated_points", 100).in("user_id", ids),
-    ]);
-    if (profiles.error || lineups.error) return <p role="alert">Unable to load Stuff a Bus results.</p>;
-    const completed = new Set(lineups.data.map(({ user_id }) => user_id));
-    for (const { id, username } of profiles.data) {
-      const guess = guesses.get(id);
-      if (guess !== undefined && completed.has(id)) {
-        eligible.push({ id, username, guess, difference: Math.abs(guess - total) });
-      }
-    }
-  }
-  eligible.sort((a, b) => a.difference - b.difference || a.username.localeCompare(b.username));
   const places = new Map<number, number>();
-  eligible.forEach(({ difference }, index) => {
-    if (!places.has(difference)) places.set(difference, index + 1);
+  eligible.forEach(({ distance }, index) => {
+    if (!places.has(distance)) places.set(distance, index + 1);
   });
-  const winners = eligible.filter(({ difference }) => places.get(difference) === 1);
+  const winners = eligible.filter(({ distance }) => places.get(distance) === 1);
   return (
     <>
       <h2>{total} {total === 1 ? "bus" : "buses"} stuffed</h2>
@@ -79,10 +59,10 @@ async function StuffABusResults({ db, total }: { db: Awaited<ReturnType<typeof s
           <p><strong>{winners.length === 1 ? "Winner" : "Tied winners"}</strong> · {winners.map(({ username }) => username).join(", ")}</p>
           <table>
             <thead><tr><th scope="col">Place</th><th scope="col">Player</th><th scope="col">Guess</th><th scope="col">Buses off</th></tr></thead>
-            <tbody>{eligible.map(({ id, username, guess, difference }) => (
-              <tr key={id}>
-                <td>{places.get(difference)}</td>
-                <td>{username}</td><td>{guess}</td><td>{difference}</td>
+            <tbody>{eligible.map(({ user_id, username, guess, distance }) => (
+              <tr key={user_id}>
+                <td>{places.get(distance)}</td>
+                <td>{username}</td><td>{guess}</td><td>{distance}</td>
               </tr>
             ))}</tbody>
           </table>
